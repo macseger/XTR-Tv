@@ -168,7 +168,14 @@ fun MainScreen(
             }
             showPlaybackControls -> showPlaybackControls = false
             showChannelList -> showChannelList = false
-            else -> showExitDialog = true
+            else -> {
+                if (viewModel.activePlaybackMode == MainViewModel.AppMode.LIVE) {
+                    showExitDialog = true
+                } else {
+                    viewModel.changeMode(viewModel.activePlaybackMode)
+                    showChannelList = true
+                }
+            }
         }
     }
 
