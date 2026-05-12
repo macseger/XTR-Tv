@@ -1,0 +1,6 @@
+<resources>
+
+    <style name="Theme.XTRTv" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="android:windowBackground">#000000</item>
+    </style>
+</resources>
