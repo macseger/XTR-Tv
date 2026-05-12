@@ -53,6 +53,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.PlayerView
 import androidx.tv.material3.*
+import coil.compose.AsyncImage
 import com.example.xtrtv.R
 import com.example.xtrtv.data.UserData
 import com.example.xtrtv.ui.components.*
@@ -554,10 +555,21 @@ fun MainScreen(
                                     ) {
                                         Row(
                                             modifier = Modifier
-                                                .padding(horizontal = 16.dp, vertical = 12.dp)
+                                                .padding(horizontal = 16.dp, vertical = 8.dp)
                                                 .fillMaxWidth(),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
+                                            // Picon
+                                            AsyncImage(
+                                                model = stream.streamIcon,
+                                                contentDescription = null,
+                                                modifier = Modifier
+                                                    .size(40.dp)
+                                                    .padding(end = 12.dp)
+                                                    .background(Color.Black.copy(alpha = 0.2f), RoundedCornerShape(4.dp)),
+                                                contentScale = androidx.compose.ui.layout.ContentScale.Fit
+                                            )
+
                                             Column(modifier = Modifier.weight(1.2f)) {
                                                 Text(
                                                     text = stream.name,
