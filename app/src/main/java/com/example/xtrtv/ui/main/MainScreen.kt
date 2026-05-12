@@ -153,16 +153,22 @@ fun MainScreen(
             showLogoutDialog -> showLogoutDialog = false
             showExitDialog -> showExitDialog = false
             viewModel.showResumeDialog -> viewModel.showResumeDialog = false
-            showSearchOverlay -> showSearchOverlay = false
-            showSeriesDetails -> showSeriesDetails = false
+            showSearchOverlay -> {
+                showSearchOverlay = false
+                showChannelList = false
+            }
+            showSeriesDetails -> {
+                showSeriesDetails = false
+                showChannelList = false
+            }
             showContextMenu -> {
-                if (showSubtitleMenu) showSubtitleMenu = false
-                else showContextMenu = false
+                showSubtitleMenu = false
+                showContextMenu = false
+                showChannelList = false
             }
             showPlaybackControls -> showPlaybackControls = false
             showChannelList -> showChannelList = false
-            viewModel.activePlaybackMode == MainViewModel.AppMode.LIVE -> showExitDialog = true
-            else -> showChannelList = true
+            else -> showExitDialog = true
         }
     }
 
@@ -523,7 +529,10 @@ fun MainScreen(
                                     .padding(horizontal = 12.dp),
                                 state = channelListState
                             ) {
-                                itemsIndexed(viewModel.channels) { index, stream ->
+                                itemsIndexed(
+                                    items = viewModel.channels,
+                                    key = { _, stream -> stream.streamId }
+                                ) { index, stream ->
                                     val isPlaying = viewModel.currentChannel == stream
                                     val isFirst = index == 0
                                     val epgEntry = viewModel.epgMap[stream.streamId]
@@ -644,7 +653,10 @@ fun MainScreen(
                                     verticalArrangement = Arrangement.spacedBy(16.dp)
                                 ) {
                                     if (viewModel.currentMode == MainViewModel.AppMode.VOD) {
-                                        itemsIndexed(viewModel.vodMovies) { index, movie ->
+                                        itemsIndexed(
+                                            items = viewModel.vodMovies,
+                                            key = { _, movie -> movie.streamId }
+                                        ) { index, movie ->
                                             VodCard(
                                                 title = movie.name,
                                                 posterUrl = movie.streamIcon,
@@ -658,7 +670,10 @@ fun MainScreen(
                                             )
                                         }
                                     } else {
-                                        itemsIndexed(viewModel.seriesList) { index, series ->
+                                        itemsIndexed(
+                                            items = viewModel.seriesList,
+                                            key = { _, series -> series.seriesId }
+                                        ) { index, series ->
                                             VodCard(
                                                 title = series.name,
                                                 posterUrl = series.cover,
@@ -718,11 +733,9 @@ fun MainScreen(
                     .background(Color.Black.copy(alpha = 0.7f))
                     .onKeyEvent {
                         if (it.key == Key.Back && it.type == KeyEventType.KeyUp) {
-                            if (showSubtitleMenu) {
-                                showSubtitleMenu = false
-                            } else {
-                                showContextMenu = false
-                            }
+                            showSubtitleMenu = false
+                            showContextMenu = false
+                            showChannelList = false
                             true
                         } else false
                     }

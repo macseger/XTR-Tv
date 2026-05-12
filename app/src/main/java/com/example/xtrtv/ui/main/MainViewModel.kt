@@ -21,6 +21,11 @@ import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
+import androidx.media3.common.MimeTypes
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.extractor.DefaultExtractorsFactory
+import androidx.media3.extractor.ts.DefaultTsPayloadReaderFactory
+import androidx.media3.extractor.ts.TsExtractor
 import com.example.xtrtv.R
 import com.example.xtrtv.api.*
 import com.example.xtrtv.data.Prefs
@@ -134,15 +139,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(
-                15_000, // Min buffer (Lowered for less RAM usage)
-                30_000, // Max buffer
-                1_000,  // Buffer for playback (Faster start)
-                2_500   // Buffer for rebuffering
+                30_000, // Min buffer
+                60_000, // Max buffer
+                2_500,  // Buffer for playback
+                5_000   // Buffer for rebuffering
             )
             .setPrioritizeTimeOverSizeThresholds(true)
+            .setBackBuffer(10_000, true)
             .build()
 
+        val extractorsFactory = DefaultExtractorsFactory().apply {
+            setTsExtractorFlags(DefaultTsPayloadReaderFactory.FLAG_ALLOW_NON_IDR_KEYFRAMES)
+        }
+
         player = ExoPlayer.Builder(context, renderersFactory)
+            .setMediaSourceFactory(DefaultMediaSourceFactory(context, extractorsFactory))
             .setLoadControl(loadControl)
             .setAudioAttributes(AudioAttributes.DEFAULT, true)
             .setVideoScalingMode(C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING)
@@ -887,7 +898,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val baseUrl = data.url.removeSuffix("/")
         val streamUrl = "$baseUrl/live/${data.username}/${data.password}/${stream.streamId}.ts"
         
-        val mediaItem = MediaItem.fromUri(streamUrl)
+        val mediaItem = MediaItem.Builder()
+            .setUri(streamUrl)
+            .setMimeType(MimeTypes.VIDEO_MP2T)
+            .build()
         
         player?.setMediaItem(mediaItem)
         player?.prepare()
