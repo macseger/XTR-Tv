@@ -216,9 +216,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     lastEpgUpdate = dao.getLastUpdatedTime()
                 }
                 refreshEpgMap()
-            } else {
-                Log.d(TAG, "No valid EPG data found, triggering refresh")
-                refreshEpg()
             }
         }
     }
@@ -530,11 +527,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             if (cachedCategories.isNotEmpty()) {
                 categories = cachedCategories
                 selectCategory(categories.first(), forceRefresh = false)
-                
-                // NEW: Even if categories are cached, ensure we have content for search
-                if (currentMode != AppMode.LIVE) {
-                    fetchAllContentForSearch()
-                }
             } else {
                 // 2. If empty, fetch from API
                 fetchCategories()
@@ -583,11 +575,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
                     if (categories.isNotEmpty()) {
                         selectCategory(categories.first(), forceRefresh = true)
-                    }
-
-                    // Index search content in background on first load
-                    if (currentMode != AppMode.LIVE) {
-                        fetchAllContentForSearch()
                     }
                 }
             } catch (e: Exception) {
