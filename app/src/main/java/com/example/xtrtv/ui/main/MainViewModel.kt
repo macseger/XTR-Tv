@@ -21,6 +21,7 @@ import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
+import com.example.xtrtv.R
 import com.example.xtrtv.api.*
 import com.example.xtrtv.data.Prefs
 import com.example.xtrtv.data.UserData
@@ -99,6 +100,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     var isPlaying by mutableStateOf(false)
     var playbackPosition by mutableLongStateOf(0L)
     var playbackDuration by mutableLongStateOf(0L)
+    private var playbackProgressJob: kotlinx.coroutines.Job? = null
+
+    // Centralized time state for UI components
+    var currentTime by mutableLongStateOf(System.currentTimeMillis())
+        private set
 
     // Search state
     var searchQuery by mutableStateOf("")
@@ -157,7 +163,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 override fun onIsPlayingChanged(playing: Boolean) {
                     this@MainViewModel.isPlaying = playing
                     if (playing) {
-                        updatePlaybackProgress()
+                        startPlaybackProgressLoop()
+                    } else {
+                        stopPlaybackProgressLoop()
                     }
                 }
 
@@ -173,7 +181,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         if (group.type == C.TRACK_TYPE_TEXT) {
                             for (i in 0 until group.length) {
                                 val format = group.getTrackFormat(i)
-                                val label = format.label ?: format.language ?: "Spår ${subTracks.size + 1}"
+                                val label = format.label ?: format.language ?: getApplication<Application>().getString(R.string.track_label, subTracks.size + 1)
                                 subTracks.add(TrackInfo(format.id ?: "$groupIndex-$i", label, groupIndex, i))
                             }
                         }
@@ -183,6 +191,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             })
         }
         loadInitialData()
+        
+        // Centralized time update loop
+        viewModelScope.launch {
+            while (true) {
+                currentTime = System.currentTimeMillis()
+                kotlinx.coroutines.delay(1000)
+            }
+        }
         
         // Smart EPG update
         viewModelScope.launch {
@@ -245,7 +261,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     if (currentMode == AppMode.VOD) {
                         var finalCats = apiCategories.map { it.copy(type = "vod", name = cleanCategoryName(it.name)) }.toMutableList()
                         val hasHistory = withContext(Dispatchers.IO) { dao.getHistoryByType("vod").isNotEmpty() }
-                        if (hasHistory) finalCats.add(0, Category("history", "Historik", "vod"))
+                        if (hasHistory) finalCats.add(0, Category("history", getApplication<Application>().getString(R.string.history), "vod"))
                         categories = finalCats
                     }
                 }
@@ -259,7 +275,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     if (currentMode == AppMode.SERIES) {
                         var finalCats = apiCategories.map { it.copy(type = "series", name = cleanCategoryName(it.name)) }.toMutableList()
                         val hasHistory = withContext(Dispatchers.IO) { dao.getHistoryByType("series").isNotEmpty() }
-                        if (hasHistory) finalCats.add(0, Category("history", "Historik", "series"))
+                        if (hasHistory) finalCats.add(0, Category("history", getApplication<Application>().getString(R.string.history), "series"))
                         categories = finalCats
                     }
                 }
@@ -495,7 +511,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     dao.getHistoryByType(type).isNotEmpty()
                 }
                 if (hasHistory) {
-                    cachedCategories.add(0, Category("history", "Historik", type))
+                    cachedCategories.add(0, Category("history", getApplication<Application>().getString(R.string.history), type))
                 }
             }
 
@@ -542,7 +558,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             dao.getHistoryByType(type).isNotEmpty()
                         }
                         if (hasHistory) {
-                            finalCategories.add(0, Category("history", "Historik", type))
+                            finalCategories.add(0, Category("history", getApplication<Application>().getString(R.string.history), type))
                         }
                     }
                     
@@ -903,15 +919,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun getPlayer(): ExoPlayer? = player
 
-    private fun updatePlaybackProgress() {
-        viewModelScope.launch {
+    private fun startPlaybackProgressLoop() {
+        playbackProgressJob?.cancel()
+        playbackProgressJob = viewModelScope.launch {
             while (isPlaying) {
                 player?.let { p ->
                     playbackPosition = p.currentPosition.coerceAtLeast(0L)
                     playbackDuration = p.duration.coerceAtLeast(0L)
                     
                     // Save history every 5 seconds or on significant progress
-                    // We check if it's been ~5 seconds since last save
                     if ((p.currentPosition / 1000) % 5 == 0L) {
                         if (activePlaybackMode == AppMode.VOD || activePlaybackMode == AppMode.SERIES) {
                             saveProgress(p.currentPosition, p.duration)
@@ -921,6 +937,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 kotlinx.coroutines.delay(1000)
             }
         }
+    }
+
+    private fun stopPlaybackProgressLoop() {
+        playbackProgressJob?.cancel()
+        playbackProgressJob = null
     }
 
     private fun saveProgress(position: Long, duration: Long) {
