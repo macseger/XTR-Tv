@@ -25,6 +25,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -96,13 +97,19 @@ fun MainScreen(
     val contextMenuFocusRequester = remember { FocusRequester() }
     val railFocusRequester = remember { FocusRequester() }
     val playbackFocusRequester = remember { FocusRequester() }
+    val contentFocusRequester = remember { FocusRequester() }
 
     LaunchedEffect(userData) {
         viewModel.init(context, userData)
     }
 
     // Deterministic Focus Management
-    LaunchedEffect(showChannelList, showContextMenu, showSubtitleMenu, showSeriesDetails, showSearchOverlay, showExitDialog, showLogoutDialog, showUrlDialog, viewModel.showResumeDialog, viewModel.currentMode) {
+    LaunchedEffect(
+        showChannelList, showContextMenu, showSubtitleMenu, showSeriesDetails, 
+        showSearchOverlay, showExitDialog, showLogoutDialog, showUrlDialog, 
+        viewModel.showResumeDialog, viewModel.currentMode, viewModel.selectedCategory,
+        viewModel.channels, viewModel.vodMovies, viewModel.seriesList
+    ) {
         if (showSeriesDetails || showSearchOverlay || showExitDialog || showLogoutDialog || showUrlDialog || viewModel.showResumeDialog) {
             return@LaunchedEffect
         }
@@ -124,7 +131,11 @@ fun MainScreen(
                     railFocusRequester.requestFocus()
                 }
             } else {
-                if (viewModel.categories.isNotEmpty()) {
+                if (viewModel.currentMode == MainViewModel.AppMode.VOD && viewModel.vodMovies.isNotEmpty()) {
+                    contentFocusRequester.requestFocus()
+                } else if (viewModel.currentMode == MainViewModel.AppMode.SERIES && viewModel.seriesList.isNotEmpty()) {
+                    contentFocusRequester.requestFocus()
+                } else if (viewModel.categories.isNotEmpty()) {
                     menuFocusRequester.requestFocus()
                 } else {
                     railFocusRequester.requestFocus()
@@ -254,8 +265,28 @@ fun MainScreen(
 
         // 3. Playback Controls Overlay
         if (showPlaybackControls && !viewModel.showResumeDialog && (viewModel.activePlaybackMode == MainViewModel.AppMode.VOD || viewModel.activePlaybackMode == MainViewModel.AppMode.SERIES)) {
+            val displayTitle = if (viewModel.activePlaybackMode == MainViewModel.AppMode.SERIES) {
+                val seriesName = viewModel.selectedSeries?.name ?: ""
+                val episode = viewModel.pendingEpisode
+                val seasonNum = viewModel.seriesDetails?.episodes?.entries?.find { entry -> 
+                    entry.value.any { it.id == episode?.id } 
+                }?.key ?: ""
+                val episodeNum = episode?.episodeNum ?: ""
+                
+                if (seriesName.isNotEmpty()) {
+                    var title = seriesName
+                    if (seasonNum.isNotEmpty()) title += " - ${stringResource(R.string.season_label, seasonNum)}"
+                    if (episodeNum.isNotEmpty()) title += " - ${stringResource(R.string.episode_label, episodeNum)}"
+                    title
+                } else {
+                    viewModel.pendingMovie?.name ?: stringResource(R.string.now_playing)
+                }
+            } else {
+                viewModel.pendingMovie?.name ?: stringResource(R.string.now_playing)
+            }
+
             PlaybackControls(
-                title = viewModel.pendingMovie?.name ?: stringResource(R.string.now_playing),
+                title = displayTitle,
                 isPlaying = viewModel.isPlaying,
                 position = viewModel.playbackPosition,
                 duration = viewModel.playbackDuration,
@@ -601,11 +632,12 @@ fun MainScreen(
                                     verticalArrangement = Arrangement.spacedBy(16.dp)
                                 ) {
                                     if (viewModel.currentMode == MainViewModel.AppMode.VOD) {
-                                        items(viewModel.vodMovies) { movie ->
+                                        itemsIndexed(viewModel.vodMovies) { index, movie ->
                                             VodCard(
                                                 title = movie.name,
                                                 posterUrl = movie.streamIcon,
                                                 rating = movie.rating,
+                                                modifier = if (index == 0) Modifier.focusRequester(contentFocusRequester) else Modifier,
                                                 onClick = { 
                                                     showPlaybackControls = false
                                                     viewModel.playVod(movie)
@@ -614,11 +646,12 @@ fun MainScreen(
                                             )
                                         }
                                     } else {
-                                        items(viewModel.seriesList) { series ->
+                                        itemsIndexed(viewModel.seriesList) { index, series ->
                                             VodCard(
                                                 title = series.name,
                                                 posterUrl = series.cover,
                                                 rating = series.rating,
+                                                modifier = if (index == 0) Modifier.focusRequester(contentFocusRequester) else Modifier,
                                                 onClick = { 
                                                     viewModel.loadSeriesDetails(series)
                                                     showSeriesDetails = true

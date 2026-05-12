@@ -228,8 +228,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             isEpgUpdating = true
             val currentTime = System.currentTimeMillis()
+            // Don't delete everything, just the old stuff to keep the DB size manageable
             withContext(Dispatchers.IO) {
-                dao.deleteOldEpg(currentTime)
+                dao.deleteOldEpg(currentTime - (24 * 3600 * 1000)) // Keep last 24h
             }
             fetchEpgFromApi()
         }
@@ -297,6 +298,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private suspend fun syncAllContent() = withContext(Dispatchers.IO) {
         val data = userData ?: return@withContext
+        
+        // Check if we already have content to avoid massive sync on every start
+        val vodCount = dao.getVodCount()
+        val seriesCount = dao.getSeriesCount()
+        
+        // Only sync if empty or if it was a long time ago (manual refresh handles the rest)
+        if (vodCount > 0 && seriesCount > 0) {
+            Log.d(TAG, "Sync: Content already exists (VOD: $vodCount, Series: $seriesCount), skipping full sync")
+            return@withContext
+        }
+
         try {
             val apiService = ApiClient.createService(data.url)
             

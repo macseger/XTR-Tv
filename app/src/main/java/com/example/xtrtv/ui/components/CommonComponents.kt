@@ -131,11 +131,12 @@ fun VodCard(
     title: String,
     posterUrl: String?,
     rating: String?,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
     Surface(
         onClick = onClick,
-        modifier = Modifier
+        modifier = modifier
             .aspectRatio(0.7f)
             .fillMaxWidth(),
         shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(8.dp)),

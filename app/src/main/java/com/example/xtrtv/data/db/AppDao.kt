@@ -55,6 +55,12 @@ interface AppDao {
     @Query("SELECT COUNT(*) FROM epg_data WHERE stop > :currentTime")
     suspend fun getValidEpgCount(currentTime: Long): Int
 
+    @Query("SELECT COUNT(*) FROM vod_movies")
+    suspend fun getVodCount(): Int
+
+    @Query("SELECT COUNT(*) FROM series")
+    suspend fun getSeriesCount(): Int
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertMappings(mappings: List<ChannelMappingEntity>)
 
