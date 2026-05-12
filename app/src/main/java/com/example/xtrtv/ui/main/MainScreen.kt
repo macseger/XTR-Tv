@@ -79,8 +79,8 @@ fun MainScreen(
     var lastInteractionTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
     
     // Auto-hide controls
-    LaunchedEffect(showPlaybackControls, lastInteractionTime) {
-        if (showPlaybackControls) {
+    LaunchedEffect(showPlaybackControls, lastInteractionTime, viewModel.isPlaying) {
+        if (showPlaybackControls && viewModel.isPlaying) {
             kotlinx.coroutines.delay(5000)
             showPlaybackControls = false
         }
@@ -174,7 +174,14 @@ fun MainScreen(
                                 viewModel.changeMode(MainViewModel.AppMode.LIVE)
                                 showChannelList = true
                             } else {
-                                showPlaybackControls = true
+                                // Toggle play/pause and show overlay
+                                val wasPlaying = viewModel.isPlaying
+                                viewModel.togglePlayPause()
+                                if (wasPlaying) {
+                                    showPlaybackControls = true
+                                } else {
+                                    showPlaybackControls = false
+                                }
                                 lastInteractionTime = System.currentTimeMillis()
                             }
                             true
@@ -252,7 +259,13 @@ fun MainScreen(
                 isPlaying = viewModel.isPlaying,
                 position = viewModel.playbackPosition,
                 duration = viewModel.playbackDuration,
-                onPlayPause = { viewModel.togglePlayPause() },
+                onPlayPause = { 
+                    val wasPlaying = viewModel.isPlaying
+                    viewModel.togglePlayPause() 
+                    if (!wasPlaying) { // If it was paused, it's now playing
+                        showPlaybackControls = false
+                    }
+                },
                 onSeek = { pos, smooth -> viewModel.seekTo(pos, smooth) },
                 focusRequester = playbackFocusRequester
             )

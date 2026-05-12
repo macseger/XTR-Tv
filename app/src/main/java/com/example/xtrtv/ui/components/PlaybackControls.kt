@@ -1,6 +1,7 @@
 package com.example.xtrtv.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -81,6 +82,8 @@ fun PlaybackControls(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black.copy(alpha = 0.5f))
+            .focusRequester(focusRequester)
+            .focusable()
             .onKeyEvent { event ->
                 when (event.nativeKeyEvent.keyCode) {
                     android.view.KeyEvent.KEYCODE_DPAD_LEFT -> {
@@ -188,29 +191,6 @@ fun PlaybackControls(
             }
             
             Spacer(modifier = Modifier.height(24.dp))
-            
-            // Play/Pause indicator
-            Surface(
-                onClick = onPlayPause,
-                modifier = Modifier
-                    .size(80.dp)
-                    .focusRequester(focusRequester),
-                shape = ClickableSurfaceDefaults.shape(CircleShape),
-                colors = ClickableSurfaceDefaults.colors(
-                    containerColor = if (isPlaying) Color.Transparent else Turquoise,
-                    focusedContainerColor = Color.White,
-                    contentColor = if (isPlaying) Color.White else Color.Black,
-                    focusedContentColor = Color.Black
-                )
-            ) {
-                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                    Icon(
-                        imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = "Play/Pause",
-                        modifier = Modifier.size(48.dp)
-                    )
-                }
-            }
         }
     }
 }

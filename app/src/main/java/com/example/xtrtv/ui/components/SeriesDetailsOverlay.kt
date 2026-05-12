@@ -3,9 +3,9 @@ package com.example.xtrtv.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -28,7 +28,7 @@ import com.example.xtrtv.R
 import com.example.xtrtv.ui.main.MainViewModel
 import com.example.xtrtv.ui.theme.Turquoise
 
-@OptIn(ExperimentalTvMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun SeriesDetailsOverlay(
     viewModel: MainViewModel,
@@ -61,7 +61,7 @@ fun SeriesDetailsOverlay(
                     .clickable(enabled = false) {}
             ) {
                 // Left side: Info
-                Column(modifier = Modifier.weight(1f).padding(end = 40.dp)) {
+                Column(modifier = Modifier.weight(1f).fillMaxHeight().padding(end = 40.dp)) {
                     AsyncImage(
                         model = details.info?.cover,
                         contentDescription = details.info?.name,
@@ -89,23 +89,21 @@ fun SeriesDetailsOverlay(
                 }
 
                 // Right side: Seasons & Episodes
-                Column(modifier = Modifier.weight(2f)) {
-                    // Seasons Selection (FlowRow for automatic wrapping)
+                Column(modifier = Modifier.weight(2f).fillMaxHeight()) {
+                    // Seasons Selection (LazyRow for horizontal scrolling on TV)
                     val seasons = details.episodes?.keys?.toList() ?: emptyList()
                     
-                    @OptIn(ExperimentalLayoutApi::class)
-                    FlowRow(
+                    LazyRow(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(bottom = 16.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        contentPadding = PaddingValues(vertical = 4.dp)
                     ) {
-                        seasons.forEach { seasonNum ->
+                        items(seasons) { seasonNum ->
                             val isSelected = selectedSeason == seasonNum
                             Surface(
                                 onClick = { selectedSeason = seasonNum },
-                                modifier = Modifier.padding(vertical = 4.dp),
                                 colors = ClickableSurfaceDefaults.colors(
                                     containerColor = if (isSelected) Turquoise else Color.Transparent,
                                     contentColor = if (isSelected) Color.Black else Color.White,
@@ -169,7 +167,7 @@ fun SeriesDetailsOverlay(
                     // Episodes List
                     val episodes = details.episodes?.get(selectedSeason) ?: emptyList()
                     LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier.weight(1f).fillMaxWidth(),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         itemsIndexed(episodes) { index, episode ->
