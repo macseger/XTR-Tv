@@ -65,6 +65,7 @@ import com.example.xtrtv.R
 import com.example.xtrtv.data.UserData
 import com.example.xtrtv.ui.components.*
 import com.example.xtrtv.ui.theme.Turquoise
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.*
@@ -161,17 +162,29 @@ fun MainScreen(
 
     LaunchedEffect(focusContentTrigger) {
         if (focusContentTrigger > 0 && showChannelList) {
-            // Give time for the list to update and then move focus to content
-            kotlinx.coroutines.delay(300)
-            
-            // Reset scroll positions to ensure the first item is visible before focusing
+            try {
+                kotlinx.coroutines.withTimeout(3000) {
+                    snapshotFlow {
+                        when (viewModel.currentMode) {
+                            MainViewModel.AppMode.LIVE -> viewModel.channels.isNotEmpty()
+                            MainViewModel.AppMode.VOD -> viewModel.vodMovies.isNotEmpty()
+                            MainViewModel.AppMode.SERIES -> viewModel.seriesList.isNotEmpty()
+                        }
+                    }.first { it }
+                }
+            } catch (e: Exception) {
+                return@LaunchedEffect
+            }
+
+            kotlinx.coroutines.delay(200)
+
             try {
                 if (viewModel.currentMode == MainViewModel.AppMode.LIVE) {
                     channelListState.scrollToItem(0)
                 } else {
                     vodGridState.scrollToItem(0)
                 }
-            } catch (_: Exception) {}
+            } catch (e: Exception) {}
             
             if ((viewModel.currentMode == MainViewModel.AppMode.LIVE && viewModel.channels.isNotEmpty()) ||
                 (viewModel.currentMode == MainViewModel.AppMode.VOD && viewModel.vodMovies.isNotEmpty()) ||
@@ -179,7 +192,7 @@ fun MainScreen(
                 try {
                     contentFocusRequester.requestFocus()
                 } catch (e: Exception) {
-                    Log.e("MainScreen", "Focus request failed for category ${viewModel.selectedCategory?.name}", e)
+                    Log.e("MainScreen", "Focus request failed", e)
                 }
             }
         }

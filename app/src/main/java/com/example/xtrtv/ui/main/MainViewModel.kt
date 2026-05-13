@@ -123,6 +123,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     var filteredVod by mutableStateOf<List<VodMovie>>(emptyList())
     var filteredSeries by mutableStateOf<List<Series>>(emptyList())
 
+    private var categoryLoadJob: kotlinx.coroutines.Job? = null
+    private var syncJob: kotlinx.coroutines.Job? = null
+
     data class TrackInfo(val id: String, val name: String, val groupIndex: Int, val trackIndex: Int)
 
     private var player: ExoPlayer? = null
@@ -193,7 +196,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun startGentleBackgroundSync() {
         if (isBackgroundSyncing) return
         
-        viewModelScope.launch(Dispatchers.IO) {
+        syncJob = viewModelScope.launch(Dispatchers.IO) {
             try {
                 isBackgroundSyncing = true
                 val data = userData ?: return@launch
@@ -213,19 +216,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
 
                 // B. Sync Content in small chunks with delays (The "Gentle" part)
-                // This populates the search and VOD/Series views without lagging the UI
+                // Use smaller chunks and longer delays to ensure UI thread database access isn't blocked
                 
                 // Throttled VOD Sync
                 val vodResp = apiService.getVodStreams(data.username, data.password)
                 if (vodResp.isSuccessful) {
                     val movies = vodResp.body() ?: emptyList()
-                    val chunks = movies.chunked(100)
+                    val chunks = movies.chunked(50) // Smaller chunks
                     chunks.forEachIndexed { index, chunk ->
-                        backgroundSyncMessage = "Syncing VOD: ${((index + 1) * 100 * 100 / movies.size).coerceAtMost(100)}%"
+                        backgroundSyncMessage = "Syncing VOD: ${((index + 1) * 50 * 100 / movies.size).coerceAtMost(100)}%"
                         dao.insertVod(chunk.map { 
                             VodEntity(it.streamId, it.name, it.streamIcon, it.categoryId, it.rating, it.containerExtension, it.added)
                         })
-                        kotlinx.coroutines.delay(200) // Breather for DB/UI
+                        kotlinx.coroutines.delay(400) // Longer delay
                     }
                 }
 
@@ -233,13 +236,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val seriesResp = apiService.getSeries(data.username, data.password)
                 if (seriesResp.isSuccessful) {
                     val seriesList = seriesResp.body() ?: emptyList()
-                    val chunks = seriesList.chunked(100)
+                    val chunks = seriesList.chunked(50) // Smaller chunks
                     chunks.forEachIndexed { index, chunk ->
-                        backgroundSyncMessage = "Syncing Series: ${((index + 1) * 100 * 100 / seriesList.size).coerceAtMost(100)}%"
+                        backgroundSyncMessage = "Syncing Series: ${((index + 1) * 50 * 100 / seriesList.size).coerceAtMost(100)}%"
                         dao.insertSeries(chunk.map { 
                             SeriesEntity(it.seriesId, it.name, it.cover, it.categoryId, it.rating, it.plot)
                         })
-                        kotlinx.coroutines.delay(200) // Breather for DB/UI
+                        kotlinx.coroutines.delay(400) // Longer delay
                     }
                 }
 
@@ -251,6 +254,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 backgroundSyncMessage = "Update Complete!"
                 kotlinx.coroutines.delay(3000)
                 backgroundSyncMessage = null
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                // Sync cancelled
             } catch (e: Exception) {
                 Log.e(TAG, "Background sync failed", e)
             } finally {
@@ -687,86 +692,100 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             ((currentMode == AppMode.VOD && vodMovies.isNotEmpty()) || 
              (currentMode == AppMode.SERIES && seriesList.isNotEmpty()) ||
              (currentMode == AppMode.LIVE && channels.isNotEmpty()))) {
-            return // Avoid reloading same category
+            return
         }
         
         selectedCategory = category
+        
+        // Immediate feedback: Clear lists for VOD/Series to prevent heavy diffing of old vs new large lists
+        if (currentMode != AppMode.LIVE) {
+            vodMovies = emptyList()
+            seriesList = emptyList()
+        }
 
-        viewModelScope.launch {
-            when(currentMode) {
-                AppMode.LIVE -> {
-                    val cachedStreams = withContext(Dispatchers.IO) {
-                        dao.getStreamsByCategory(category.id).map { 
-                            LiveStream(it.streamId, it.name, it.streamIcon, it.categoryId, it.num, it.epgChannelId)
-                        }
-                    }
-                    if (cachedStreams.isNotEmpty() && !forceRefresh) {
-                        channels = withContext(Dispatchers.Default) {
-                            cachedStreams.sortedBy { it.num ?: it.streamId }
-                        }
-                        refreshEpgMap()
-                        
-                        // Check if we should auto-play
-                        if (currentChannel == null && channels.isNotEmpty()) {
-                            val lastId = prefs.lastChannelId
-                            val lastChannel = channels.find { it.streamId == lastId }
-                            if (lastChannel != null) {
-                                playChannel(lastChannel)
-                            } else if (category.id != "history") { 
-                                playChannel(channels.first())
+        categoryLoadJob?.cancel()
+        categoryLoadJob = viewModelScope.launch {
+            try {
+                when(currentMode) {
+                    AppMode.LIVE -> {
+                        val cachedStreams = withContext(Dispatchers.IO) {
+                            dao.getStreamsByCategory(category.id).map { 
+                                LiveStream(it.streamId, it.name, it.streamIcon, it.categoryId, it.num, it.epgChannelId)
                             }
                         }
-                    } else {
-                        fetchLiveStreams(category.id)
-                    }
-                }
-                AppMode.VOD -> {
-                    if (category.id == "history") {
-                        vodMovies = withContext(Dispatchers.IO) {
-                            dao.getHistoryByType("vod").map {
-                                VodMovie(it.streamId, it.name, it.streamIcon, it.categoryId, null, null, null)
+                        if (cachedStreams.isNotEmpty() && !forceRefresh) {
+                            channels = withContext(Dispatchers.Default) {
+                                cachedStreams.sortedBy { it.num ?: it.streamId }
                             }
-                        }
-                    } else {
-                        val cachedVod = withContext(Dispatchers.IO) {
-                            dao.getVodByCategory(category.id)
-                        }
-                        
-                        if (cachedVod.isNotEmpty() && !forceRefresh) {
-                            vodMovies = withContext(Dispatchers.Default) {
-                                cachedVod.map {
-                                    VodMovie(it.streamId, it.name, it.streamIcon, it.categoryId, it.rating, it.added, it.containerExtension)
-                                }.sortedByDescending { it.streamId }
-                            }
-                        } else {
-                            fetchVodMovies(category.id)
-                        }
-                    }
-                }
-                AppMode.SERIES -> {
-                    if (category.id == "history") {
-                        seriesList = withContext(Dispatchers.IO) {
-                            dao.getHistoryByType("series")
-                                .distinctBy { it.seriesId ?: it.streamId }
-                                .map {
-                                    Series(it.seriesId ?: it.streamId, it.name, it.streamIcon, null, null, null, null, null, null, it.categoryId)
+                            refreshEpgMap()
+                            
+                            if (currentChannel == null && channels.isNotEmpty()) {
+                                val lastId = prefs.lastChannelId
+                                val lastChannel = channels.find { it.streamId == lastId }
+                                if (lastChannel != null) {
+                                    playChannel(lastChannel)
+                                } else if (category.id != "history") { 
+                                    playChannel(channels.first())
                                 }
-                        }
-                    } else {
-                        val cachedSeries = withContext(Dispatchers.IO) {
-                            dao.getSeriesByCategory(category.id)
-                        }
-                        if (cachedSeries.isNotEmpty() && !forceRefresh) {
-                            seriesList = withContext(Dispatchers.Default) {
-                                cachedSeries.map {
-                                    Series(it.seriesId, it.name, it.cover, it.plot, null, null, null, null, it.rating, it.categoryId)
-                                }.sortedByDescending { it.seriesId }
                             }
                         } else {
-                            fetchSeries(category.id)
+                            fetchLiveStreams(category.id)
+                        }
+                    }
+                    AppMode.VOD -> {
+                        if (category.id == "history") {
+                            vodMovies = withContext(Dispatchers.IO) {
+                                dao.getHistoryByType("vod").map {
+                                    VodMovie(it.streamId, it.name, it.streamIcon, it.categoryId, null, null, null)
+                                }
+                            }
+                        } else {
+                            val cachedVod = withContext(Dispatchers.IO) {
+                                dao.getVodByCategory(category.id)
+                            }
+                            
+                            if (cachedVod.isNotEmpty() && !forceRefresh) {
+                                val mapped = withContext(Dispatchers.Default) {
+                                    cachedVod.map {
+                                        VodMovie(it.streamId, it.name, it.streamIcon, it.categoryId, it.rating, it.added, it.containerExtension)
+                                    }.sortedByDescending { it.streamId }
+                                }
+                                vodMovies = mapped
+                            } else {
+                                fetchVodMovies(category.id)
+                            }
+                        }
+                    }
+                    AppMode.SERIES -> {
+                        if (category.id == "history") {
+                            seriesList = withContext(Dispatchers.IO) {
+                                dao.getHistoryByType("series")
+                                    .distinctBy { it.seriesId ?: it.streamId }
+                                    .map {
+                                        Series(it.seriesId ?: it.streamId, it.name, it.streamIcon, null, null, null, null, null, null, it.categoryId)
+                                    }
+                            }
+                        } else {
+                            val cachedSeries = withContext(Dispatchers.IO) {
+                                dao.getSeriesByCategory(category.id)
+                            }
+                            if (cachedSeries.isNotEmpty() && !forceRefresh) {
+                                val mapped = withContext(Dispatchers.Default) {
+                                    cachedSeries.map {
+                                        Series(it.seriesId, it.name, it.cover, it.plot, null, null, null, null, it.rating, it.categoryId)
+                                    }.sortedByDescending { it.seriesId }
+                                }
+                                seriesList = mapped
+                            } else {
+                                fetchSeries(category.id)
+                            }
                         }
                     }
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                // Normal
+            } catch (e: Exception) {
+                Log.e(TAG, "Error selecting category", e)
             }
         }
     }
