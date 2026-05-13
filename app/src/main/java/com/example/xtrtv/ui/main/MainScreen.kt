@@ -578,6 +578,7 @@ fun MainScreen(
                                 val isSelected = viewModel.selectedCategory?.id == category.id
                                 Surface(
                                     onClick = { 
+                                        // Still keep click for manual trigger if needed
                                         viewModel.selectCategory(category)
                                         focusPlayingNow = false
                                         focusContentTrigger++
@@ -585,9 +586,16 @@ fun MainScreen(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(horizontal = 8.dp, vertical = 2.dp)
+                                        .onFocusChanged { 
+                                            if (it.isFocused && !isSelected) {
+                                                viewModel.selectCategory(category)
+                                            }
+                                        }
                                         .focusProperties {
                                             exit = { dir ->
-                                                if (dir == FocusDirection.Left) {
+                                                if (dir == FocusDirection.Right) {
+                                                    contentFocusRequester
+                                                } else if (dir == FocusDirection.Left) {
                                                     railFocusRequester
                                                 } else {
                                                     FocusRequester.Default
