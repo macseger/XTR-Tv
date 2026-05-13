@@ -42,4 +42,18 @@ object ApiClient {
             this
         } + if (!endsWith("/")) "/" else ""
     }
+
+    fun createGithubService(): GithubService {
+        val client = OkHttpClient.Builder()
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(15, TimeUnit.SECONDS)
+            .build()
+
+        return Retrofit.Builder()
+            .baseUrl("https://api.github.com/")
+            .client(client)
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+            .create(GithubService::class.java)
+    }
 }

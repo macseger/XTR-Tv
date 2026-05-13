@@ -1044,6 +1044,34 @@ fun MainScreen(
                                     }
                                 )
                             }
+                            item {
+                                val context = LocalContext.current
+                                val updateStatus = viewModel.updateStatus
+                                val isChecking = viewModel.isCheckingUpdate
+                                
+                                ContextMenuItem(
+                                    text = updateStatus ?: stringResource(R.string.check_updates),
+                                    icon = { 
+                                        if (isChecking) {
+                                            androidx.compose.material3.CircularProgressIndicator(
+                                                modifier = Modifier.size(20.dp),
+                                                strokeWidth = 2.dp,
+                                                color = Turquoise
+                                            )
+                                        } else {
+                                            Icon(Icons.Default.SystemUpdate, null, modifier = Modifier.size(20.dp))
+                                        }
+                                    },
+                                    onClick = {
+                                        if (viewModel.latestRelease != null) {
+                                            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(viewModel.latestRelease?.html_url))
+                                            context.startActivity(intent)
+                                        } else {
+                                            viewModel.checkForUpdates()
+                                        }
+                                    }
+                                )
+                            }
                         } else if (showSubtitleMenu) {
                             item {
                                 ContextMenuItem(

@@ -52,4 +52,9 @@
     <string name="track_label">Spår %1$d</string>
     <string name="audio_track_label">Ljudspår %1$d</string>
     <string name="audio_tracks">Ljudspår</string>
+    <string name="check_updates">Kolla uppdateringar</string>
+    <string name="update_available">Ny uppdatering tillgänglig!</string>
+    <string name="update_not_available">Du har den senaste versionen.</string>
+    <string name="check_update_error">Kunde inte kolla efter uppdateringar.</string>
+    <string name="version_label">Version: %1$s</string>
 </resources>

@@ -126,6 +126,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     var filteredVod by mutableStateOf<List<VodMovie>>(emptyList())
     var filteredSeries by mutableStateOf<List<Series>>(emptyList())
 
+    var updateStatus by mutableStateOf<String?>(null)
+    var isCheckingUpdate by mutableStateOf(false)
+    var latestRelease by mutableStateOf<GithubRelease?>(null)
+
     private var categoryLoadJob: kotlinx.coroutines.Job? = null
     private var syncJob: kotlinx.coroutines.Job? = null
 
@@ -1192,6 +1196,43 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 filteredSeries = seriesResults.map {
                     Series(it.seriesId, it.name, it.cover, it.plot, null, null, null, null, it.rating, it.categoryId)
                 }
+            }
+        }
+    }
+
+    fun checkForUpdates() {
+        if (isCheckingUpdate) return
+        
+        viewModelScope.launch {
+            isCheckingUpdate = true
+            updateStatus = null
+            try {
+                val service = ApiClient.createGithubService()
+                val response = service.getLatestRelease("macseger", "XTR-Tv")
+                
+                if (response.isSuccessful) {
+                    val release = response.body()
+                    if (release != null) {
+                        val pInfo = getApplication<Application>()
+                            .packageManager
+                            .getPackageInfo(getApplication<Application>().packageName, 0)
+                        val currentVersion = pInfo.versionName
+                            
+                        if (release.tag_name != currentVersion) {
+                            latestRelease = release
+                            updateStatus = getApplication<Application>().getString(R.string.update_available)
+                        } else {
+                            updateStatus = getApplication<Application>().getString(R.string.update_not_available)
+                        }
+                    }
+                } else {
+                    updateStatus = getApplication<Application>().getString(R.string.check_update_error)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Update check failed", e)
+                updateStatus = getApplication<Application>().getString(R.string.check_update_error)
+            } finally {
+                isCheckingUpdate = false
             }
         }
     }
