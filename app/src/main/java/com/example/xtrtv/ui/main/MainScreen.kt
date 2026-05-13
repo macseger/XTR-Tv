@@ -273,8 +273,13 @@ fun MainScreen(
                                 true
                             }
                             android.view.KeyEvent.KEYCODE_DPAD_UP -> {
-                                viewModel.changeMode(viewModel.activePlaybackMode)
-                                showChannelList = true
+                                showSubtitleMenu = true
+                                showContextMenu = true
+                                true
+                            }
+                            android.view.KeyEvent.KEYCODE_DPAD_DOWN -> {
+                                showSubtitleMenu = false
+                                showContextMenu = true
                                 true
                             }
                             android.view.KeyEvent.KEYCODE_DPAD_LEFT -> {
@@ -296,7 +301,21 @@ fun MainScreen(
                     } else false
                 } else if (showPlaybackControls && event.type == KeyEventType.KeyUp) {
                     lastInteractionTime = System.currentTimeMillis()
-                    false
+                    when (event.nativeKeyEvent.keyCode) {
+                        android.view.KeyEvent.KEYCODE_DPAD_UP -> {
+                            showPlaybackControls = false
+                            showSubtitleMenu = true
+                            showContextMenu = true
+                            true
+                        }
+                        android.view.KeyEvent.KEYCODE_DPAD_DOWN -> {
+                            showPlaybackControls = false
+                            showSubtitleMenu = false
+                            showContextMenu = true
+                            true
+                        }
+                        else -> false
+                    }
                 } else false
             }
     ) {
