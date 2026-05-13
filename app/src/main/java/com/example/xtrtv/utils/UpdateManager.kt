@@ -8,6 +8,7 @@ import android.content.IntentFilter
 import android.net.Uri
 import android.os.Environment
 import android.util.Log
+import android.widget.Toast
 import androidx.core.content.FileProvider
 import java.io.File
 
@@ -16,6 +17,9 @@ class UpdateManager(private val context: Context) {
 
     fun downloadAndInstall(url: String, fileName: String) {
         try {
+            Log.d(TAG, "Starting download from $url")
+            Toast.makeText(context, "Laddar ner uppdatering...", Toast.LENGTH_LONG).show()
+            
             val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
             val uri = Uri.parse(url)
             
@@ -23,17 +27,23 @@ class UpdateManager(private val context: Context) {
                 setTitle("Uppdaterar XTR Tv")
                 setDescription("Laddar ner ny version...")
                 setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName)
+                setDestinationInExternalFilesDir(context, Environment.DIRECTORY_DOWNLOADS, fileName)
             }
 
             val downloadId = downloadManager.enqueue(request)
+            Log.d(TAG, "Download enqueued with ID $downloadId")
             
             val onComplete = object : BroadcastReceiver() {
                 override fun onReceive(context: Context, intent: Intent) {
                     val id = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1)
                     if (id == downloadId) {
+                        Log.d(TAG, "Download completed, starting installation")
                         installApk(fileName)
-                        context.unregisterReceiver(this)
+                        try {
+                            context.unregisterReceiver(this)
+                        } catch (e: Exception) {
+                            // Already unregistered
+                        }
                     }
                 }
             }
@@ -45,19 +55,18 @@ class UpdateManager(private val context: Context) {
             }
         } catch (e: Exception) {
             Log.e(TAG, "Download failed", e)
+            Toast.makeText(context, "Nedladdning misslyckades: ${e.message}", Toast.LENGTH_LONG).show()
         }
     }
 
     private fun installApk(fileName: String) {
         try {
-            val file = File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), fileName)
+            val file = File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), fileName)
+            Log.d(TAG, "Checking for APK at ${file.absolutePath}")
+            
             if (!file.exists()) {
-                // Try alternative path if first fails
-                val altFile = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), fileName)
-                if (!altFile.exists()) {
-                    Log.e(TAG, "APK file not found at ${file.absolutePath}")
-                    return
-                }
+                Log.e(TAG, "APK file not found at ${file.absolutePath}")
+                return
             }
 
             val uri = FileProvider.getUriForFile(
@@ -65,6 +74,7 @@ class UpdateManager(private val context: Context) {
                 "${context.packageName}.fileprovider",
                 file
             )
+            Log.d(TAG, "Installing APK with URI: $uri")
 
             val intent = Intent(Intent.ACTION_VIEW).apply {
                 setDataAndType(uri, "application/vnd.android.package-archive")
@@ -74,6 +84,7 @@ class UpdateManager(private val context: Context) {
             context.startActivity(intent)
         } catch (e: Exception) {
             Log.e(TAG, "Installation failed", e)
+            Toast.makeText(context, "Installation misslyckades: ${e.message}", Toast.LENGTH_LONG).show()
         }
     }
 }
