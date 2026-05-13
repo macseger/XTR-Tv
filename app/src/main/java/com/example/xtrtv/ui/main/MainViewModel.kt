@@ -290,7 +290,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
 
                 // 3. Sync ALL content (this also populates the UI for the current category)
-                syncAllContent()
+                syncAllContent(force = true)
                 
                 // 4. Update the UI state for the current selected category
                 selectedCategory?.let { 
@@ -304,17 +304,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private suspend fun syncAllContent() = withContext(Dispatchers.IO) {
+    private suspend fun syncAllContent(force: Boolean = false) = withContext(Dispatchers.IO) {
         val data = userData ?: return@withContext
         
-        // Check if we already have content to avoid massive sync on every start
-        val vodCount = dao.getVodCount()
-        val seriesCount = dao.getSeriesCount()
-        
-        // Only sync if empty or if it was a long time ago (manual refresh handles the rest)
-        if (vodCount > 0 && seriesCount > 0) {
-            Log.d(TAG, "Sync: Content already exists (VOD: $vodCount, Series: $seriesCount), skipping full sync")
-            return@withContext
+        if (!force) {
+            // Check if we already have content to avoid massive sync on every start
+            val vodCount = dao.getVodCount()
+            val seriesCount = dao.getSeriesCount()
+            
+            // Only sync if empty or if it was a long time ago (manual refresh handles the rest)
+            if (vodCount > 0 && seriesCount > 0) {
+                Log.d(TAG, "Sync: Content already exists (VOD: $vodCount, Series: $seriesCount), skipping full sync")
+                return@withContext
+            }
         }
 
         try {
@@ -328,9 +330,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val vodResp = apiService.getVodStreams(data.username, data.password)
             if (vodResp.isSuccessful && !vodResp.body().isNullOrEmpty()) {
                 val movies = vodResp.body()!!
-                dao.insertVod(movies.map { 
+                val entities = movies.map { 
                     VodEntity(it.streamId, it.name, it.streamIcon, it.categoryId, it.rating, it.containerExtension, it.added)
-                })
+                }
+                entities.chunked(500).forEach { dao.insertVod(it) }
                 Log.d(TAG, "Sync: Successfully fetched all ${movies.size} VODs at once")
             } else {
                 // Fallback: Fetch per category
@@ -339,9 +342,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     val resp = apiService.getVodStreams(data.username, data.password, categoryId = cat.id)
                     if (resp.isSuccessful) {
                         resp.body()?.let { movies ->
-                            dao.insertVod(movies.map { 
+                            val entities = movies.map { 
                                 VodEntity(it.streamId, it.name, it.streamIcon, it.categoryId, it.rating, it.containerExtension, it.added)
-                            })
+                            }
+                            entities.chunked(500).forEach { dao.insertVod(it) }
                         }
                     }
                 }
@@ -351,9 +355,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val seriesResp = apiService.getSeries(data.username, data.password)
             if (seriesResp.isSuccessful && !seriesResp.body().isNullOrEmpty()) {
                 val series = seriesResp.body()!!
-                dao.insertSeries(series.map { 
+                val entities = series.map { 
                     SeriesEntity(it.seriesId, it.name, it.cover, it.categoryId, it.rating, it.plot)
-                })
+                }
+                entities.chunked(500).forEach { dao.insertSeries(it) }
                 Log.d(TAG, "Sync: Successfully fetched all ${series.size} series at once")
             } else {
                 // Fallback: Fetch per category
@@ -362,9 +367,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     val resp = apiService.getSeries(data.username, data.password, categoryId = cat.id)
                     if (resp.isSuccessful) {
                         resp.body()?.let { series ->
-                            dao.insertSeries(series.map { 
+                            val entities = series.map { 
                                 SeriesEntity(it.seriesId, it.name, it.cover, it.categoryId, it.rating, it.plot)
-                            })
+                            }
+                            entities.chunked(500).forEach { dao.insertSeries(it) }
                         }
                     }
                 }
@@ -435,7 +441,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         val mappingEntities = result.channelMap.map { 
                             ChannelMappingEntity(it.key, it.value) 
                         }
-                        dao.insertMappings(mappingEntities)
+                        mappingEntities.chunked(500).forEach { dao.insertMappings(it) }
                         lastEpgUpdate = System.currentTimeMillis()
                         refreshEpgMap()
                     }
