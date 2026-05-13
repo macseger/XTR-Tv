@@ -50,4 +50,6 @@
     <string name="live">LIVE</string>
     <string name="history">Historik</string>
     <string name="track_label">Spår %1$d</string>
+    <string name="audio_track_label">Ljudspår %1$d</string>
+    <string name="audio_tracks">Ljudspår</string>
 </resources>

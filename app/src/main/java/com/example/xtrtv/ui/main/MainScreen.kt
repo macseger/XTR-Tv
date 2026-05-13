@@ -32,6 +32,8 @@ import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
@@ -81,6 +83,7 @@ fun MainScreen(
     var showChannelList by remember { mutableStateOf(false) }
     var showContextMenu by remember { mutableStateOf(false) }
     var showSubtitleMenu by remember { mutableStateOf(false) }
+    var showAudioMenu by remember { mutableStateOf(false) }
     var showSeriesDetails by remember { mutableStateOf(false) }
     var showSearchOverlay by remember { mutableStateOf(false) }
     var showPlaybackControls by remember { mutableStateOf(false) }
@@ -96,7 +99,8 @@ fun MainScreen(
         derivedStateOf {
             showChannelList || showContextMenu || showPlaybackControls || 
             showSeriesDetails || showSearchOverlay || showExitDialog || 
-            showLogoutDialog || showUrlDialog || viewModel.showResumeDialog
+            showLogoutDialog || showUrlDialog || viewModel.showResumeDialog ||
+            showAudioMenu
         }
     }
     
@@ -220,6 +224,7 @@ fun MainScreen(
             showSeriesDetails -> showSeriesDetails = false
             showContextMenu -> {
                 showSubtitleMenu = false
+                showAudioMenu = false
                 showContextMenu = false
             }
             showPlaybackControls -> showPlaybackControls = false
@@ -867,43 +872,93 @@ fun MainScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.7f))
+                    .background(Color.Black.copy(alpha = 0.8f))
                     .onKeyEvent {
                         if (it.key == Key.Back && it.type == KeyEventType.KeyUp) {
                             showSubtitleMenu = false
+                            showAudioMenu = false
                             showContextMenu = false
-                            showChannelList = false
                             true
                         } else false
                     }
                     .clickable { 
                         showContextMenu = false
                         showSubtitleMenu = false
+                        showAudioMenu = false
                     },
                 contentAlignment = Alignment.Center
             ) {
                 Column(
                     modifier = Modifier
-                        .width(300.dp)
-                        .background(Color(0xFF1A1A1A), shape = MaterialTheme.shapes.medium)
-                        .padding(16.dp)
+                        .width(400.dp)
+                        .background(Color(0xFF121212), shape = RoundedCornerShape(24.dp))
+                        .padding(24.dp)
                         .clickable(enabled = false) {}
                 ) {
-                    Text(
-                        text = if (showSubtitleMenu) stringResource(R.string.subtitles) else stringResource(R.string.menu),
-                        style = MaterialTheme.typography.headlineSmall,
-                        modifier = Modifier.padding(bottom = 16.dp),
-                        color = Color.White
-                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 24.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            val titleIcon = when {
+                                showSubtitleMenu -> Icons.Default.Subtitles
+                                showAudioMenu -> Icons.Default.Audiotrack
+                                else -> Icons.Default.Settings
+                            }
+                            val titleText = when {
+                                showSubtitleMenu -> stringResource(R.string.subtitles)
+                                showAudioMenu -> stringResource(R.string.audio_tracks)
+                                else -> stringResource(R.string.menu)
+                            }
+                            Icon(
+                                imageVector = titleIcon,
+                                contentDescription = null,
+                                tint = Turquoise,
+                                modifier = Modifier.size(28.dp)
+                            )
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Text(
+                                text = titleText,
+                                style = MaterialTheme.typography.headlineSmall,
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        
+                        if (showSubtitleMenu || showAudioMenu) {
+                            Surface(
+                                onClick = { 
+                                    showSubtitleMenu = false
+                                    showAudioMenu = false
+                                },
+                                colors = ClickableSurfaceDefaults.colors(
+                                    containerColor = Color.Transparent,
+                                    focusedContainerColor = Color.White.copy(alpha = 0.1f)
+                                ),
+                                shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(50))
+                            ) {
+                                Icon(
+                                    Icons.Default.Close,
+                                    contentDescription = null,
+                                    modifier = Modifier.padding(8.dp).size(20.dp),
+                                    tint = Color.Gray
+                                )
+                            }
+                        }
+                    }
 
                     LazyColumn(
-                        modifier = Modifier.heightIn(max = 400.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                        modifier = Modifier.heightIn(max = 450.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        if (!showSubtitleMenu) {
+                        if (!showSubtitleMenu && !showAudioMenu) {
                             item {
                                 ContextMenuItem(
                                     text = stringResource(R.string.refresh_channels),
+                                    icon = { Icon(Icons.Default.Refresh, null, modifier = Modifier.size(20.dp)) },
                                     focusRequester = contextMenuFocusRequester,
                                     onClick = {
                                         viewModel.forceUpdateChannels()
@@ -914,6 +969,7 @@ fun MainScreen(
                             item {
                                 ContextMenuItem(
                                     text = stringResource(R.string.refresh_epg),
+                                    icon = { Icon(Icons.Default.Event, null, modifier = Modifier.size(20.dp)) },
                                     onClick = {
                                         viewModel.refreshEpg()
                                         showContextMenu = false
@@ -923,6 +979,7 @@ fun MainScreen(
                             item {
                                 ContextMenuItem(
                                     text = stringResource(R.string.refresh_vod_series),
+                                    icon = { Icon(Icons.Default.MovieFilter, null, modifier = Modifier.size(20.dp)) },
                                     onClick = {
                                         viewModel.refreshVodAndSeries()
                                         showContextMenu = false
@@ -932,6 +989,7 @@ fun MainScreen(
                             item {
                                 ContextMenuItem(
                                     text = stringResource(R.string.subtitles),
+                                    icon = { Icon(Icons.Default.Subtitles, null, modifier = Modifier.size(20.dp)) },
                                     onClick = {
                                         showSubtitleMenu = true
                                     }
@@ -939,25 +997,37 @@ fun MainScreen(
                             }
                             item {
                                 ContextMenuItem(
-                                    text = stringResource(R.string.tunneling) + ": " + (if (viewModel.isTunnelingEnabled) stringResource(R.string.on) else stringResource(R.string.off)),
+                                    text = stringResource(R.string.audio_tracks),
+                                    icon = { Icon(Icons.Default.Audiotrack, null, modifier = Modifier.size(20.dp)) },
                                     onClick = {
-                                        viewModel.toggleTunneling()
-                                        showContextMenu = false
+                                        showAudioMenu = true
                                     }
                                 )
                             }
                             item {
                                 ContextMenuItem(
-                                    text = stringResource(R.string.frame_rate_matching) + ": " + (if (viewModel.isFrameRateMatchingEnabled) stringResource(R.string.on) else stringResource(R.string.off)),
+                                    text = stringResource(R.string.tunneling),
+                                    icon = { Icon(Icons.Default.Speed, null, modifier = Modifier.size(20.dp)) },
+                                    isSelected = viewModel.isTunnelingEnabled,
+                                    onClick = {
+                                        viewModel.toggleTunneling()
+                                    }
+                                )
+                            }
+                            item {
+                                ContextMenuItem(
+                                    text = stringResource(R.string.frame_rate_matching),
+                                    icon = { Icon(Icons.Default.SlowMotionVideo, null, modifier = Modifier.size(20.dp)) },
+                                    isSelected = viewModel.isFrameRateMatchingEnabled,
                                     onClick = {
                                         viewModel.toggleFrameRateMatching()
-                                        showContextMenu = false
                                     }
                                 )
                             }
                             item {
                                 ContextMenuItem(
                                     text = stringResource(R.string.change_server_url),
+                                    icon = { Icon(Icons.Default.Language, null, modifier = Modifier.size(20.dp)) },
                                     onClick = {
                                         showUrlDialog = true
                                         showContextMenu = false
@@ -967,16 +1037,19 @@ fun MainScreen(
                             item {
                                 ContextMenuItem(
                                     text = stringResource(R.string.logout),
+                                    icon = { Icon(Icons.AutoMirrored.Filled.Logout, null, modifier = Modifier.size(20.dp)) },
                                     onClick = {
                                         showLogoutDialog = true
                                         showContextMenu = false
                                     }
                                 )
                             }
-                        } else {
+                        } else if (showSubtitleMenu) {
                             item {
                                 ContextMenuItem(
                                     text = stringResource(R.string.off),
+                                    icon = { Icon(Icons.Default.SubtitlesOff, null, modifier = Modifier.size(20.dp)) },
+                                    isSelected = viewModel.selectedSubtitleId == null,
                                     focusRequester = contextMenuFocusRequester,
                                     onClick = {
                                         viewModel.selectSubtitle(null)
@@ -988,9 +1061,26 @@ fun MainScreen(
                             items(viewModel.subtitleTracks) { track ->
                                 ContextMenuItem(
                                     text = track.name,
+                                    icon = { Icon(Icons.Default.ClosedCaption, null, modifier = Modifier.size(20.dp)) },
+                                    isSelected = viewModel.selectedSubtitleId == track.id,
                                     onClick = {
                                         viewModel.selectSubtitle(track)
                                         showSubtitleMenu = false
+                                        showContextMenu = false
+                                    }
+                                )
+                            }
+                        } else {
+                            // Audio Menu
+                            itemsIndexed(viewModel.audioTracks) { index, track ->
+                                ContextMenuItem(
+                                    text = track.name,
+                                    icon = { Icon(Icons.Default.Audiotrack, null, modifier = Modifier.size(20.dp)) },
+                                    isSelected = viewModel.selectedAudioId == track.id,
+                                    focusRequester = if (index == 0) contextMenuFocusRequester else null,
+                                    onClick = {
+                                        viewModel.selectAudio(track)
+                                        showAudioMenu = false
                                         showContextMenu = false
                                     }
                                 )

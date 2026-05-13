@@ -3,6 +3,14 @@ package com.example.xtrtv.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Subtitles
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Logout
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -104,6 +112,7 @@ fun LoadingIndicator(text: String) {
 fun ContextMenuItem(
     text: String,
     icon: (@Composable () -> Unit)? = null,
+    isSelected: Boolean = false,
     focusRequester: FocusRequester? = null,
     onClick: () -> Unit
 ) {
@@ -114,22 +123,36 @@ fun ContextMenuItem(
             .padding(vertical = 4.dp)
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier),
         colors = ClickableSurfaceDefaults.colors(
-            containerColor = Color.Transparent,
+            containerColor = if (isSelected) Turquoise.copy(alpha = 0.15f) else Color.Transparent,
             focusedContainerColor = Turquoise,
-            contentColor = Color.White,
+            contentColor = if (isSelected) Turquoise else Color.White,
             focusedContentColor = Color.Black
         ),
-        shape = ClickableSurfaceDefaults.shape(MaterialTheme.shapes.small)
+        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(12.dp)),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.05f)
     ) {
         Row(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (icon != null) {
                 icon()
-                Spacer(modifier = Modifier.width(12.dp))
+                Spacer(modifier = Modifier.width(16.dp))
             }
-            Text(text = text, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                text = text, 
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                modifier = Modifier.weight(1f)
+            )
+            if (isSelected) {
+                Icon(
+                    imageVector = Icons.Default.Check,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    tint = LocalContentColor.current
+                )
+            }
         }
     }
 }

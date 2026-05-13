@@ -106,6 +106,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     var isTunnelingEnabled by mutableStateOf(false)
     var isFrameRateMatchingEnabled by mutableStateOf(false)
     var subtitleTracks by mutableStateOf<List<TrackInfo>>(emptyList())
+    var selectedSubtitleId by mutableStateOf<String?>(null)
+    var audioTracks by mutableStateOf<List<TrackInfo>>(emptyList())
+    var selectedAudioId by mutableStateOf<String?>(null)
         private set
 
     // Playback state
@@ -290,13 +293,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             .build()
 
         val extractorsFactory = DefaultExtractorsFactory().apply {
-            setTsExtractorFlags(DefaultTsPayloadReaderFactory.FLAG_ALLOW_NON_IDR_KEYFRAMES)
+            setTsExtractorFlags(
+                DefaultTsPayloadReaderFactory.FLAG_ALLOW_NON_IDR_KEYFRAMES or
+                DefaultTsPayloadReaderFactory.FLAG_DETECT_ACCESS_UNITS
+            )
         }
+
+        val audioAttributes = AudioAttributes.Builder()
+            .setUsage(C.USAGE_MEDIA)
+            .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
+            .build()
 
         player = ExoPlayer.Builder(context, renderersFactory)
             .setMediaSourceFactory(DefaultMediaSourceFactory(context, extractorsFactory))
             .setLoadControl(loadControl)
-            .setAudioAttributes(AudioAttributes.DEFAULT, true)
+            .setAudioAttributes(audioAttributes, true)
             .setVideoScalingMode(C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING)
             .build().apply {
             
@@ -329,16 +340,38 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
                 override fun onTracksChanged(tracks: Tracks) {
                     val subTracks = mutableListOf<TrackInfo>()
+                    val aTracks = mutableListOf<TrackInfo>()
+                    var currentSubId: String? = null
+                    var currentAudId: String? = null
+                    
                     tracks.groups.forEachIndexed { groupIndex, group ->
-                        if (group.type == C.TRACK_TYPE_TEXT) {
-                            for (i in 0 until group.length) {
-                                val format = group.getTrackFormat(i)
-                                val label = format.label ?: format.language ?: getApplication<Application>().getString(R.string.track_label, subTracks.size + 1)
-                                subTracks.add(TrackInfo(format.id ?: "$groupIndex-$i", label, groupIndex, i))
+                        when (group.type) {
+                            C.TRACK_TYPE_TEXT -> {
+                                for (i in 0 until group.length) {
+                                    val format = group.getTrackFormat(i)
+                                    val isSelected = group.isTrackSelected(i)
+                                    val label = format.label ?: format.language ?: getApplication<Application>().getString(R.string.track_label, subTracks.size + 1)
+                                    val id = format.id ?: "sub-$groupIndex-$i"
+                                    subTracks.add(TrackInfo(id, label, groupIndex, i))
+                                    if (isSelected) currentSubId = id
+                                }
+                            }
+                            C.TRACK_TYPE_AUDIO -> {
+                                for (i in 0 until group.length) {
+                                    val format = group.getTrackFormat(i)
+                                    val isSelected = group.isTrackSelected(i)
+                                    val label = format.label ?: format.language ?: getApplication<Application>().getString(R.string.audio_track_label, aTracks.size + 1)
+                                    val id = format.id ?: "audio-$groupIndex-$i"
+                                    aTracks.add(TrackInfo(id, label, groupIndex, i))
+                                    if (isSelected) currentAudId = id
+                                }
                             }
                         }
                     }
                     subtitleTracks = subTracks
+                    selectedSubtitleId = currentSubId
+                    audioTracks = aTracks
+                    selectedAudioId = currentAudId
                 }
             })
         }
@@ -1018,6 +1051,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     .buildUpon()
                     .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
                     .build()
+                selectedSubtitleId = null
             } else {
                 p.trackSelectionParameters = p.trackSelectionParameters
                     .buildUpon()
@@ -1029,7 +1063,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         )
                     )
                     .build()
+                selectedSubtitleId = track.id
             }
+        }
+    }
+
+    fun selectAudio(track: TrackInfo) {
+        player?.let { p ->
+            p.trackSelectionParameters = p.trackSelectionParameters
+                .buildUpon()
+                .setOverrideForType(
+                    androidx.media3.common.TrackSelectionOverride(
+                        p.currentTracks.groups[track.groupIndex].mediaTrackGroup,
+                        track.trackIndex
+                    )
+                )
+                .build()
+            selectedAudioId = track.id
         }
     }
 
