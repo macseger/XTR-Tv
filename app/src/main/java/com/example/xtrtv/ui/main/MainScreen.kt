@@ -93,6 +93,7 @@ fun MainScreen(
     var showUrlDialog by remember { mutableStateOf(false) }
     var lastInteractionTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var focusContentTrigger by remember { mutableIntStateOf(0) }
+    var focusCategoryTrigger by remember { mutableIntStateOf(0) }
     var focusPlayingNow by remember { mutableStateOf(true) }
     
     // Derived state for better performance - avoids full recomposition on every sub-state change
@@ -205,6 +206,24 @@ fun MainScreen(
                 }
             } catch (e: Exception) {
                 Log.e("MainScreen", "Failed to focus content", e)
+            }
+        }
+    }
+
+    LaunchedEffect(focusCategoryTrigger) {
+        if (focusCategoryTrigger > 0 && showChannelList) {
+            try {
+                // Wait for categories to be available
+                kotlinx.coroutines.withTimeoutOrNull(2000) {
+                    while (viewModel.categories.isEmpty()) {
+                        kotlinx.coroutines.delay(50)
+                    }
+                }
+                kotlinx.coroutines.delay(100)
+                categoryListState.scrollToItem(0)
+                categoryFocusRequester.requestFocus()
+            } catch (e: Exception) {
+                Log.e("MainScreen", "Failed to focus category", e)
             }
         }
     }
@@ -469,6 +488,8 @@ fun MainScreen(
                                     viewModel.changeMode(mode)
                                     if (mode == MainViewModel.AppMode.LIVE) {
                                         showChannelList = false
+                                    } else {
+                                        focusCategoryTrigger++
                                     }
                                     focusPlayingNow = false
                                     focusContentTrigger++
