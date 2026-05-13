@@ -47,6 +47,12 @@ object ApiClient {
         val client = OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(15, TimeUnit.SECONDS)
+            .addInterceptor { chain ->
+                val request = chain.request().newBuilder()
+                    .header("User-Agent", "XTRTv-App")
+                    .build()
+                chain.proceed(request)
+            }
             .build()
 
         return Retrofit.Builder()

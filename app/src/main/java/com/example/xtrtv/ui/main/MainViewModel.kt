@@ -1207,16 +1207,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             isCheckingUpdate = true
             updateStatus = null
             try {
+                Log.d(TAG, "Checking for updates at GitHub: macseger/XTR-Tv")
                 val service = ApiClient.createGithubService()
                 val response = service.getLatestRelease("macseger", "XTR-Tv")
                 
+                Log.d(TAG, "GitHub response code: ${response.code()}")
+                
                 if (response.isSuccessful) {
                     val release = response.body()
+                    Log.d(TAG, "GitHub release found: ${release?.tag_name}")
                     if (release != null) {
                         val pInfo = getApplication<Application>()
                             .packageManager
                             .getPackageInfo(getApplication<Application>().packageName, 0)
                         val currentVersion = pInfo.versionName
+                        
+                        Log.d(TAG, "Current app version: $currentVersion, GitHub version: ${release.tag_name}")
                             
                         if (release.tag_name != currentVersion) {
                             latestRelease = release
@@ -1226,11 +1232,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         }
                     }
                 } else {
-                    updateStatus = getApplication<Application>().getString(R.string.check_update_error)
+                    val errorBody = response.errorBody()?.string()
+                    Log.e(TAG, "GitHub error response: $errorBody")
+                    updateStatus = "GitHub Fel: ${response.code()}"
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Update check failed", e)
-                updateStatus = getApplication<Application>().getString(R.string.check_update_error)
+                Log.e(TAG, "Update check failed with exception: ${e.message}", e)
+                updateStatus = "Error: ${e.message}"
             } finally {
                 isCheckingUpdate = false
             }
