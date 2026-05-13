@@ -586,18 +586,11 @@ fun MainScreen(
                                         .fillMaxWidth()
                                         .padding(horizontal = 8.dp, vertical = 2.dp)
                                         .focusProperties {
-                                            // Dynamic exit property: Only allow moving right if there's content to move to
-                                            if (FocusDirection.Right == FocusDirection.Right) {
-                                                exit = { dir ->
-                                                    if (dir == FocusDirection.Right && !hasContent) {
-                                                        FocusRequester.Cancel
-                                                    } else if (dir == FocusDirection.Right) {
-                                                        contentFocusRequester
-                                                    } else if (dir == FocusDirection.Left) {
-                                                        railFocusRequester
-                                                    } else {
-                                                        FocusRequester.Default
-                                                    }
+                                            exit = { dir ->
+                                                if (dir == FocusDirection.Left) {
+                                                    railFocusRequester
+                                                } else {
+                                                    FocusRequester.Default
                                                 }
                                             }
                                         }
