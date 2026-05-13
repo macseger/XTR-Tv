@@ -96,6 +96,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     var isLoading by mutableStateOf(false)
     var isEpgUpdating by mutableStateOf(false)
+    var backgroundStatus by mutableStateOf<String?>(null)
     var isTunnelingEnabled by mutableStateOf(false)
     var isFrameRateMatchingEnabled by mutableStateOf(false)
     var subtitleTracks by mutableStateOf<List<TrackInfo>>(emptyList())
@@ -123,6 +124,86 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val db = AppDatabase.getDatabase(application)
     private val dao = db.appDao()
     private val prefs = Prefs(application)
+
+    fun initialSync(onChannelsReady: () -> Unit) {
+        val data = userData ?: return
+        viewModelScope.launch {
+            try {
+                // 1. First Priority: Live Categories & Channels
+                backgroundStatus = getApplication<Application>().getString(R.string.loading) + " " + getApplication<Application>().getString(R.string.live).lowercase()
+                isLoading = true
+                
+                val apiService = ApiClient.createService(data.url)
+                val catResp = apiService.getLiveCategories(data.username, data.password)
+                if (catResp.isSuccessful) {
+                    val apiCategories = catResp.body() ?: emptyList()
+                    val finalCats = apiCategories.map { Category(it.id, cleanCategoryName(it.name), "live") }
+                    categories = finalCats
+                    withContext(Dispatchers.IO) {
+                        dao.insertCategories(apiCategories.map { CategoryEntity(it.id, it.name, "live") })
+                    }
+                    
+                    if (categories.isNotEmpty()) {
+                        // Load first category channels immediately
+                        val firstCat = categories.first()
+                        selectedCategory = firstCat
+                        val streamResp = apiService.getLiveStreams(data.username, data.password, categoryId = firstCat.id)
+                        if (streamResp.isSuccessful) {
+                            val apiStreams = streamResp.body() ?: emptyList()
+                            channels = apiStreams
+                            withContext(Dispatchers.IO) {
+                                dao.insertStreams(apiStreams.map { 
+                                    StreamEntity(it.streamId, it.name, it.streamIcon, it.categoryId, it.num, it.epgChannelId)
+                                })
+                            }
+                            // Trigger UI to show channels
+                            onChannelsReady()
+                            
+                            // Try to auto-play first channel
+                            if (channels.isNotEmpty()) playChannel(channels.first())
+                        }
+                    }
+                }
+                isLoading = false
+                
+                // 2. Second Priority: EPG (Background)
+                backgroundStatus = getApplication<Application>().getString(R.string.updating_epg)
+                isEpgUpdating = true
+                fetchEpgFromApi() // This runs in its own IO scope
+                
+                // 3. Third Priority: VOD/Series Categories & Content (Background)
+                backgroundStatus = getApplication<Application>().getString(R.string.loading) + " " + getApplication<Application>().getString(R.string.movies).lowercase() + "/" + getApplication<Application>().getString(R.string.series).lowercase()
+                
+                // Sync VOD Categories
+                val vCatResp = apiService.getVodCategories(data.username, data.password)
+                if (vCatResp.isSuccessful) {
+                    val vCats = vCatResp.body() ?: emptyList()
+                    withContext(Dispatchers.IO) {
+                        dao.insertCategories(vCats.map { CategoryEntity(it.id, it.name, "vod") })
+                    }
+                }
+                
+                // Sync Series Categories
+                val sCatResp = apiService.getSeriesCategories(data.username, data.password)
+                if (sCatResp.isSuccessful) {
+                    val sCats = sCatResp.body() ?: emptyList()
+                    withContext(Dispatchers.IO) {
+                        dao.insertCategories(sCats.map { CategoryEntity(it.id, it.name, "series") })
+                    }
+                }
+                
+                // Finally, full sync in background
+                syncAllContent(force = true)
+                
+            } catch (e: Exception) {
+                Log.e(TAG, "Error during initial sync", e)
+            } finally {
+                backgroundStatus = null
+                isLoading = false
+                isEpgUpdating = false
+            }
+        }
+    }
 
     @OptIn(UnstableApi::class)
     fun init(context: Context, data: UserData) {

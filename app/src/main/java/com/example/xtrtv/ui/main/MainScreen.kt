@@ -58,6 +58,7 @@ import com.example.xtrtv.R
 import com.example.xtrtv.data.UserData
 import com.example.xtrtv.ui.components.*
 import com.example.xtrtv.ui.theme.Turquoise
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -101,7 +102,17 @@ fun MainScreen(
     val contentFocusRequester = remember { FocusRequester() }
 
     LaunchedEffect(userData) {
+        val needsInitialSync = withContext(kotlinx.coroutines.Dispatchers.IO) {
+            viewModel.categories.isEmpty() && viewModel.channels.isEmpty()
+        }
+        
         viewModel.init(context, userData)
+        
+        if (needsInitialSync) {
+            viewModel.initialSync(onChannelsReady = {
+                showChannelList = true
+            })
+        }
     }
 
     // Deterministic Focus Management
@@ -871,9 +882,9 @@ fun MainScreen(
             }
         }
 
-        if (viewModel.isEpgUpdating || viewModel.isLoading) {
+        if (viewModel.isEpgUpdating || viewModel.isLoading || viewModel.backgroundStatus != null) {
             LoadingIndicator(
-                text = if (viewModel.isEpgUpdating) stringResource(R.string.updating_epg) else stringResource(R.string.loading)
+                text = viewModel.backgroundStatus ?: if (viewModel.isEpgUpdating) stringResource(R.string.updating_epg) else stringResource(R.string.loading)
             )
         }
 
