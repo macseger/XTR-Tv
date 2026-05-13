@@ -130,19 +130,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val data = userData ?: return
         viewModelScope.launch {
             try {
+                val isFirstSync = categories.isEmpty()
                 // 1. First Priority: Live Categories & Channels
                 backgroundStatus = getApplication<Application>().getString(R.string.loading) + " " + getApplication<Application>().getString(R.string.live).lowercase()
-                isLoading = true
+                if (isFirstSync) isLoading = true
                 
                 val apiService = ApiClient.createService(data.url)
                 val catResp = apiService.getLiveCategories(data.username, data.password)
                 if (catResp.isSuccessful) {
                     val apiCategories = catResp.body() ?: emptyList()
                     val finalCats = apiCategories.map { Category(it.id, cleanCategoryName(it.name), "live") }
-                    categories = finalCats
+                    
                     withContext(Dispatchers.IO) {
                         dao.insertCategories(apiCategories.map { CategoryEntity(it.id, it.name, "live") })
                     }
+                    
+                    // Update UI state
+                    categories = finalCats
                     
                     if (categories.isNotEmpty()) {
                         // Load first category channels immediately
@@ -151,17 +155,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         val streamResp = apiService.getLiveStreams(data.username, data.password, categoryId = firstCat.id)
                         if (streamResp.isSuccessful) {
                             val apiStreams = streamResp.body() ?: emptyList()
-                            channels = apiStreams
+                            
                             withContext(Dispatchers.IO) {
                                 dao.insertStreams(apiStreams.map { 
                                     StreamEntity(it.streamId, it.name, it.streamIcon, it.categoryId, it.num, it.epgChannelId)
                                 })
                             }
+                            
+                            channels = apiStreams
                             // Trigger UI to show channels
                             onChannelsReady()
                             
-                            // Try to auto-play first channel
-                            if (channels.isNotEmpty()) playChannel(channels.first())
+                            // Try to auto-play first channel if nothing is playing
+                            if (currentChannel == null && channels.isNotEmpty()) playChannel(channels.first())
                         }
                     }
                 }
@@ -287,10 +293,33 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             })
         }
         
-        // mappings are already loaded at this point
+        // 1. Load initial data IMMEDIATELY to show UI
         loadInitialData()
+
+        // 2. Load mappings in background without blocking initial data
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                val savedMappings = dao.getAllMappings()
+                val mappingMap = savedMappings.associate { it.displayName to it.channelId }
+                
+                // Do the heavy normalization on a Default dispatcher to not block IO or UI
+                val normalizedMap = withContext(Dispatchers.Default) {
+                    mappingMap.entries.associate { (displayName, id) ->
+                        normalizeName(displayName) to id
+                    }
+                }
+                
+                withContext(Dispatchers.Main) {
+                    channelIdMap = mappingMap
+                    normalizedChannelIdMap = normalizedMap
+                    lastEpgUpdate = dao.getLastUpdatedTime()
+                    // Re-trigger EPG map once mappings are ready
+                    refreshEpgMap()
+                }
+            }
+        }
         
-        // Centralized time update loop (still needed for EpgProgressBar mapping)
+        // 3. Centralized time update loop
         viewModelScope.launch {
             while (true) {
                 currentTime = System.currentTimeMillis()

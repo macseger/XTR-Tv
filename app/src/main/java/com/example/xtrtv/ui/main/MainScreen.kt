@@ -1,6 +1,8 @@
 package com.example.xtrtv.ui.main
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
@@ -132,12 +134,16 @@ fun MainScreen(
                 val index = viewModel.channels.indexOfFirst { it.streamId == currentChannel?.streamId }
                 
                 if (index >= 0) {
-                    channelListState.scrollToItem(index)
-                    kotlinx.coroutines.yield() // Ensure scroll is handled
+                    if (channelListState.firstVisibleItemIndex != index) {
+                        channelListState.scrollToItem(index)
+                        kotlinx.coroutines.yield()
+                    }
                     channelFocusRequester.requestFocus()
                 } else if (viewModel.channels.isNotEmpty()) {
-                    channelListState.scrollToItem(0)
-                    kotlinx.coroutines.yield()
+                    if (channelListState.firstVisibleItemIndex != 0) {
+                        channelListState.scrollToItem(0)
+                        kotlinx.coroutines.yield()
+                    }
                     channelFocusRequester.requestFocus()
                 } else {
                     railFocusRequester.requestFocus()
@@ -353,7 +359,11 @@ fun MainScreen(
         }
 
         // 4. Content Navigation Overlay
-        if (showChannelList) {
+        AnimatedVisibility(
+            visible = showChannelList,
+            enter = fadeIn(animationSpec = tween(300)) + expandHorizontally(animationSpec = tween(300)),
+            exit = fadeOut(animationSpec = tween(300)) + shrinkHorizontally(animationSpec = tween(300))
+        ) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
