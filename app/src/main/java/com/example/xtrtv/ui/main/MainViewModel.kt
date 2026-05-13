@@ -31,6 +31,7 @@ import com.example.xtrtv.api.*
 import com.example.xtrtv.data.Prefs
 import com.example.xtrtv.data.UserData
 import com.example.xtrtv.data.db.*
+import com.example.xtrtv.utils.UpdateManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext

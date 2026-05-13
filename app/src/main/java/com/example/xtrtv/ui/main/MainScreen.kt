@@ -66,6 +66,7 @@ import coil.request.ImageRequest
 import com.example.xtrtv.R
 import com.example.xtrtv.data.UserData
 import com.example.xtrtv.ui.components.*
+import com.example.xtrtv.utils.UpdateManager
 import com.example.xtrtv.ui.theme.Turquoise
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
@@ -1064,8 +1065,16 @@ fun MainScreen(
                                     },
                                     onClick = {
                                         if (viewModel.latestRelease != null) {
-                                            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(viewModel.latestRelease?.html_url))
-                                            context.startActivity(intent)
+                                            val apkAsset = viewModel.latestRelease?.assets?.find { it.name.endsWith(".apk") }
+                                            if (apkAsset != null) {
+                                                val updateManager = UpdateManager(context)
+                                                updateManager.downloadAndInstall(apkAsset.browser_download_url, apkAsset.name)
+                                                showContextMenu = false
+                                            } else {
+                                                // Fallback to browser if no APK asset found
+                                                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(viewModel.latestRelease?.html_url))
+                                                context.startActivity(intent)
+                                            }
                                         } else {
                                             viewModel.checkForUpdates()
                                         }
