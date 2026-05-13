@@ -82,6 +82,7 @@ fun MainScreen(
     var showLogoutDialog by remember { mutableStateOf(false) }
     var showUrlDialog by remember { mutableStateOf(false) }
     var lastInteractionTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    var focusTrigger by remember { mutableIntStateOf(0) }
     
     // Auto-hide controls
     LaunchedEffect(showPlaybackControls, lastInteractionTime, viewModel.isPlaying) {
@@ -113,22 +114,10 @@ fun MainScreen(
         }
     }
 
-    // Deterministic Focus Management
-    LaunchedEffect(
-        showChannelList, showContextMenu, showSubtitleMenu, showSeriesDetails, 
-        showSearchOverlay, showExitDialog, showLogoutDialog, showUrlDialog, 
-        viewModel.showResumeDialog, viewModel.currentMode
-    ) {
-        if (showSeriesDetails || showSearchOverlay || showExitDialog || showLogoutDialog || showUrlDialog || viewModel.showResumeDialog) {
-            return@LaunchedEffect
-        }
-        
-        // Wait for composition to settle to avoid "FocusRequester is not initialized"
-        kotlinx.coroutines.yield()
-
-        if (showContextMenu) {
-            contextMenuFocusRequester.requestFocus()
-        } else if (showChannelList) {
+    // 2. Focus Management (Event-driven)
+    LaunchedEffect(showChannelList) {
+        if (showChannelList && !showContextMenu) {
+            kotlinx.coroutines.yield()
             if (viewModel.currentMode == MainViewModel.AppMode.LIVE) {
                 val currentChannel = viewModel.currentChannel
                 val index = viewModel.channels.indexOfFirst { it.streamId == currentChannel?.streamId }
@@ -140,27 +129,33 @@ fun MainScreen(
                     }
                     channelFocusRequester.requestFocus()
                 } else if (viewModel.channels.isNotEmpty()) {
-                    if (channelListState.firstVisibleItemIndex != 0) {
-                        channelListState.scrollToItem(0)
-                        kotlinx.coroutines.yield()
-                    }
                     channelFocusRequester.requestFocus()
-                } else {
-                    railFocusRequester.requestFocus()
                 }
             } else {
-                if (viewModel.currentMode == MainViewModel.AppMode.VOD && viewModel.vodMovies.isNotEmpty()) {
-                    contentFocusRequester.requestFocus()
-                } else if (viewModel.currentMode == MainViewModel.AppMode.SERIES && viewModel.seriesList.isNotEmpty()) {
-                    contentFocusRequester.requestFocus()
-                } else if (viewModel.categories.isNotEmpty()) {
-                    menuFocusRequester.requestFocus()
-                } else {
-                    railFocusRequester.requestFocus()
-                }
+                contentFocusRequester.requestFocus()
             }
-        } else {
-            rootFocusRequester.requestFocus()
+        }
+    }
+
+    LaunchedEffect(viewModel.selectedCategory) {
+        if (showChannelList) {
+            // Give time for the list to update
+            kotlinx.coroutines.delay(100)
+            if (viewModel.currentMode == MainViewModel.AppMode.LIVE && viewModel.channels.isNotEmpty()) {
+                channelListState.scrollToItem(0)
+                kotlinx.coroutines.yield()
+                channelFocusRequester.requestFocus()
+            } else if (viewModel.currentMode != MainViewModel.AppMode.LIVE) {
+                vodGridState.scrollToItem(0)
+                kotlinx.coroutines.yield()
+                contentFocusRequester.requestFocus()
+            }
+        }
+    }
+
+    LaunchedEffect(showContextMenu) {
+        if (showContextMenu) {
+            contextMenuFocusRequester.requestFocus()
         }
     }
 
@@ -494,7 +489,10 @@ fun MainScreen(
                             items(viewModel.categories) { category ->
                                 val isSelected = viewModel.selectedCategory == category
                                 Surface(
-                                    onClick = { viewModel.selectCategory(category) },
+                                    onClick = { 
+                                        viewModel.selectCategory(category)
+                                        focusTrigger++
+                                    },
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(horizontal = 8.dp, vertical = 2.dp)

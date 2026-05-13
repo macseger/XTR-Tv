@@ -997,6 +997,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     @OptIn(UnstableApi::class)
     fun playChannel(stream: LiveStream) {
+        if (currentChannel?.streamId == stream.streamId && player?.playbackState != androidx.media3.common.Player.STATE_IDLE) {
+            return // Already playing or preparing this channel
+        }
         val data = userData ?: return
         currentChannel = stream
         activePlaybackMode = AppMode.LIVE // Set active playback mode
