@@ -15,7 +15,7 @@ data class VodEntity(
     @PrimaryKey val streamId: Int,
     val name: String,
     val streamIcon: String?,
-    val categoryId: String,
+    val categoryId: String?,
     val rating: String?,
     val containerExtension: String?,
     val added: String? = null
@@ -26,7 +26,7 @@ data class SeriesEntity(
     @PrimaryKey val seriesId: Int,
     val name: String,
     val cover: String?,
-    val categoryId: String,
+    val categoryId: String?,
     val rating: String?,
     val plot: String?,
     val lastModified: String? = null
@@ -37,7 +37,7 @@ data class StreamEntity(
     @PrimaryKey val streamId: Int,
     val name: String,
     val streamIcon: String?,
-    val categoryId: String,
+    val categoryId: String?,
     val num: Int?,
     val epgChannelId: String? = null
 )
@@ -66,7 +66,7 @@ data class PlaybackHistoryEntity(
     @PrimaryKey val streamId: Int,
     val name: String,
     val streamIcon: String?,
-    val categoryId: String,
+    val categoryId: String?,
     val type: String, // "vod" or "series"
     val position: Long,
     val duration: Long,

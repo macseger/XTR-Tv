@@ -10,6 +10,9 @@ import java.util.*
 
 object XmlEpgParser {
     private const val TAG = "XmlEpgParser"
+    
+    // SimpleDateFormat is not thread-safe, but we use it sequentially here.
+    // However, creating it once and reusing is better than recreating.
     private val dateFormat = SimpleDateFormat("yyyyMMddHHmmss Z", Locale.US)
     private val dateFormatNoTz = SimpleDateFormat("yyyyMMddHHmmss", Locale.US)
 
@@ -23,7 +26,7 @@ object XmlEpgParser {
         
         val parser = Xml.newPullParser()
         parser.setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, false)
-        parser.setInput(inputStream, null)
+        parser.setInput(inputStream, "UTF-8")
 
         var eventType = parser.eventType
         
@@ -37,55 +40,60 @@ object XmlEpgParser {
         var currentStop: Long = 0
         var currentDesc: String? = null
 
+        // Cache for date parsing to avoid repeated heavy work on same strings
+        val dateCache = mutableMapOf<String, Long>()
+
         while (eventType != XmlPullParser.END_DOCUMENT) {
-            val name = parser.name
-            when (eventType) {
-                XmlPullParser.START_TAG -> {
-                    when (name) {
-                        "channel" -> {
-                            currentMappingId = parser.getAttributeValue(null, "id")
-                            if (currentMappingId != null) {
-                                channelMap[currentMappingId] = currentMappingId
-                            }
+            if (eventType == XmlPullParser.START_TAG) {
+                when (parser.name) {
+                    "channel" -> {
+                        currentMappingId = parser.getAttributeValue(null, "id")
+                        if (currentMappingId != null) {
+                            channelMap[currentMappingId] = currentMappingId
                         }
-                        "display-name" -> {
-                            if (currentMappingId != null) {
-                                val displayName = parser.nextText()
-                                channelMap[displayName] = currentMappingId
-                            }
+                    }
+                    "display-name" -> {
+                        if (currentMappingId != null) {
+                            val displayName = parser.nextText()
+                            channelMap[displayName] = currentMappingId
                         }
-                        "programme" -> {
-                            currentChannelId = parser.getAttributeValue(null, "channel")
-                            currentStart = parseDate(parser.getAttributeValue(null, "start"))
-                            currentStop = parseDate(parser.getAttributeValue(null, "stop"))
-                        }
-                        "title" -> {
-                            currentTitle = parser.nextText()
-                        }
-                        "desc" -> {
-                            currentDesc = parser.nextText()
-                        }
+                    }
+                    "programme" -> {
+                        currentChannelId = parser.getAttributeValue(null, "channel")
+                        val startAttr = parser.getAttributeValue(null, "start")
+                        val stopAttr = parser.getAttributeValue(null, "stop")
+                        currentStart = dateCache.getOrPut(startAttr ?: "") { parseDate(startAttr) }
+                        currentStop = dateCache.getOrPut(stopAttr ?: "") { parseDate(stopAttr) }
+                        
+                        // Clear cache periodically if it gets too large to prevent OOM
+                        if (dateCache.size > 1000) dateCache.clear()
+                    }
+                    "title" -> {
+                        currentTitle = parser.nextText()
+                    }
+                    "desc" -> {
+                        currentDesc = parser.nextText()
                     }
                 }
-                XmlPullParser.END_TAG -> {
-                    if (name == "channel") {
-                        currentMappingId = null
-                    } else if (name == "programme" && currentChannelId != null && currentTitle != null) {
-                        if (currentStart > 0 && currentStop > 0) {
-                            onProgramParsed(
-                                EpgEntity(
-                                    channelId = currentChannelId,
-                                    title = currentTitle,
-                                    start = currentStart,
-                                    stop = currentStop,
-                                    description = currentDesc
-                                )
+            } else if (eventType == XmlPullParser.END_TAG) {
+                val name = parser.name
+                if (name == "channel") {
+                    currentMappingId = null
+                } else if (name == "programme" && currentChannelId != null && currentTitle != null) {
+                    if (currentStart > 0 && currentStop > 0) {
+                        onProgramParsed(
+                            EpgEntity(
+                                channelId = currentChannelId,
+                                title = currentTitle,
+                                start = currentStart,
+                                stop = currentStop,
+                                description = currentDesc
                             )
-                        }
-                        currentChannelId = null
-                        currentTitle = null
-                        currentDesc = null
+                        )
                     }
+                    currentChannelId = null
+                    currentTitle = null
+                    currentDesc = null
                 }
             }
             eventType = parser.next()
@@ -95,17 +103,25 @@ object XmlEpgParser {
     }
 
     private fun parseDate(dateStr: String?): Long {
-        if (dateStr == null) return 0
-        // Remove colon from timezone offset if present (e.g., +02:00 -> +0200)
-        val cleanDate = dateStr.trim().replace(Regex("([+-]\\d{2}):(\\d{2})$"), "$1$2")
-        return try {
-            dateFormat.parse(cleanDate)?.time ?: 0
-        } catch (e: Exception) {
+        if (dateStr == null || dateStr.length < 14) return 0
+        
+        // Manual clean up instead of Regex for speed.
+        // Handles timezones like +02:00 by converting to +0200
+        val cleanDate = if (dateStr.length >= 5 && dateStr[dateStr.length - 3] == ':') {
+            dateStr.substring(0, dateStr.length - 3) + dateStr.substring(dateStr.length - 2)
+        } else {
+            dateStr
+        }
+
+        return synchronized(dateFormat) {
             try {
-                dateFormatNoTz.parse(cleanDate)?.time ?: 0
-            } catch (e2: Exception) {
-                Log.e(TAG, "Failed to parse date: $dateStr")
-                0
+                dateFormat.parse(cleanDate)?.time ?: 0
+            } catch (e: Exception) {
+                try {
+                    dateFormatNoTz.parse(cleanDate)?.time ?: 0
+                } catch (e2: Exception) {
+                    0
+                }
             }
         }
     }

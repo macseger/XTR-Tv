@@ -222,13 +222,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val vodResp = apiService.getVodStreams(data.username, data.password)
                 if (vodResp.isSuccessful) {
                     val movies = vodResp.body() ?: emptyList()
-                    val chunks = movies.chunked(50) // Smaller chunks
+                    val chunks = movies.chunked(100) // Slightly larger chunks for background
                     chunks.forEachIndexed { index, chunk ->
-                        backgroundSyncMessage = "Syncing VOD: ${((index + 1) * 50 * 100 / movies.size).coerceAtMost(100)}%"
+                        backgroundSyncMessage = "Syncing VOD: ${((index + 1) * 100 * 100 / movies.size).coerceAtMost(100)}%"
                         dao.insertVod(chunk.map { 
-                            VodEntity(it.streamId, it.name, it.streamIcon, it.categoryId, it.rating, it.containerExtension, it.added)
+                            VodEntity(it.streamId, it.name, it.streamIcon, it.categoryId ?: "0", it.rating, it.containerExtension, it.added)
                         })
-                        kotlinx.coroutines.delay(400) // Longer delay
+                        kotlinx.coroutines.delay(200)
                     }
                 }
 
@@ -236,13 +236,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val seriesResp = apiService.getSeries(data.username, data.password)
                 if (seriesResp.isSuccessful) {
                     val seriesList = seriesResp.body() ?: emptyList()
-                    val chunks = seriesList.chunked(50) // Smaller chunks
+                    val chunks = seriesList.chunked(100)
                     chunks.forEachIndexed { index, chunk ->
-                        backgroundSyncMessage = "Syncing Series: ${((index + 1) * 50 * 100 / seriesList.size).coerceAtMost(100)}%"
+                        backgroundSyncMessage = "Syncing Series: ${((index + 1) * 100 * 100 / seriesList.size).coerceAtMost(100)}%"
                         dao.insertSeries(chunk.map { 
-                            SeriesEntity(it.seriesId, it.name, it.cover, it.categoryId, it.rating, it.plot)
+                            SeriesEntity(it.seriesId, it.name, it.cover, it.categoryId ?: "0", it.rating, it.plot)
                         })
-                        kotlinx.coroutines.delay(400) // Longer delay
+                        kotlinx.coroutines.delay(200)
                     }
                 }
 
@@ -396,29 +396,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             isLoading = true
             try {
+                // We use the background sync logic but force it to run now
+                syncJob?.cancel()
+                startGentleBackgroundSync()
+                
+                // Wait for sync to finish or just let it run? 
+                // The user expects a "refresh" so let's just make sure categories are updated
                 val data = userData!!
                 val apiService = ApiClient.createService(data.url)
                 
-                // 1. Clear old data to ensure dead movies/series are removed
-                withContext(Dispatchers.IO) {
-                    dao.clearVod()
-                    dao.clearSeries()
-                    // We don't clear categories here to avoid UI flickering, 
-                    // they will be replaced by the insert below
-                }
-
-                // 2. Refresh categories
                 val vodCatResp = apiService.getVodCategories(data.username, data.password)
                 if (vodCatResp.isSuccessful) {
                     val apiCategories = vodCatResp.body() ?: emptyList()
                     withContext(Dispatchers.IO) {
                         dao.insertCategories(apiCategories.map { CategoryEntity(it.id, it.name, "vod") })
-                    }
-                    if (currentMode == AppMode.VOD) {
-                        var finalCats = apiCategories.map { it.copy(type = "vod", name = cleanCategoryName(it.name)) }.toMutableList()
-                        val hasHistory = withContext(Dispatchers.IO) { dao.getHistoryByType("vod").isNotEmpty() }
-                        if (hasHistory) finalCats.add(0, Category("history", getApplication<Application>().getString(R.string.history), "vod"))
-                        categories = finalCats
                     }
                 }
 
@@ -428,24 +419,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     withContext(Dispatchers.IO) {
                         dao.insertCategories(apiCategories.map { CategoryEntity(it.id, it.name, "series") })
                     }
-                    if (currentMode == AppMode.SERIES) {
-                        var finalCats = apiCategories.map { it.copy(type = "series", name = cleanCategoryName(it.name)) }.toMutableList()
-                        val hasHistory = withContext(Dispatchers.IO) { dao.getHistoryByType("series").isNotEmpty() }
-                        if (hasHistory) finalCats.add(0, Category("history", getApplication<Application>().getString(R.string.history), "series"))
-                        categories = finalCats
-                    }
                 }
-
-                // 3. Sync ALL content (this also populates the UI for the current category)
-                syncAllContent(force = true)
                 
-                // Save sync time
-                prefs.lastFullSync = System.currentTimeMillis()
-                
-                // 4. Update the UI state for the current selected category
-                selectedCategory?.let { 
-                    selectCategory(it, forceRefresh = false)
-                }
+                loadInitialData()
             } catch (e: Exception) {
                 Log.e(TAG, "Error refreshing VOD/Series", e)
             } finally {
@@ -499,7 +475,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         val result = XmlEpgParser.parse(inputStream) { program ->
                             batch.add(program)
                             totalParsed++
-                            if (batch.size >= 500) {
+                            if (batch.size >= 2000) { // Larger batch size for better performance
                                 val currentBatch = batch.toList()
                                 batch.clear()
                                 dao.insertEpgData(currentBatch)

@@ -30,7 +30,7 @@ data class LiveStream(
     @SerializedName("stream_id") val streamId: Int,
     @SerializedName("name") val name: String,
     @SerializedName("stream_icon") val streamIcon: String?,
-    @SerializedName("category_id") val categoryId: String,
+    @SerializedName("category_id") val categoryId: String?,
     @SerializedName("num") val num: Int?,
     @SerializedName("epg_channel_id") val epgChannelId: String? = null
 )
@@ -39,7 +39,7 @@ data class VodMovie(
     @SerializedName("stream_id") val streamId: Int,
     @SerializedName("name") val name: String,
     @SerializedName("stream_icon") val streamIcon: String?,
-    @SerializedName("category_id") val categoryId: String,
+    @SerializedName("category_id") val categoryId: String?,
     @SerializedName("rating") val rating: String?,
     @SerializedName("added") val added: String?,
     @SerializedName("container_extension") val containerExtension: String?
@@ -55,7 +55,7 @@ data class Series(
     @SerializedName("genre") val genre: String?,
     @SerializedName("releaseDate") val releaseDate: String?,
     @SerializedName("rating") val rating: String?,
-    @SerializedName("category_id") val categoryId: String,
+    @SerializedName("category_id") val categoryId: String?,
     val lastModified: String? = null
 )
 

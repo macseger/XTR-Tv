@@ -163,20 +163,24 @@ fun MainScreen(
     LaunchedEffect(focusContentTrigger) {
         if (focusContentTrigger > 0 && showChannelList) {
             try {
-                kotlinx.coroutines.withTimeout(3000) {
-                    snapshotFlow {
-                        when (viewModel.currentMode) {
+                // Wait for the list to be non-empty with a shorter timeout and more frequent checks
+                kotlinx.coroutines.withTimeout(2000) {
+                    while (true) {
+                        val isNotEmpty = when (viewModel.currentMode) {
                             MainViewModel.AppMode.LIVE -> viewModel.channels.isNotEmpty()
                             MainViewModel.AppMode.VOD -> viewModel.vodMovies.isNotEmpty()
                             MainViewModel.AppMode.SERIES -> viewModel.seriesList.isNotEmpty()
                         }
-                    }.first { it }
+                        if (isNotEmpty) break
+                        kotlinx.coroutines.delay(50)
+                    }
                 }
             } catch (e: Exception) {
                 return@LaunchedEffect
             }
 
-            kotlinx.coroutines.delay(200)
+            // Small delay to allow composition to catch up
+            kotlinx.coroutines.delay(100)
 
             try {
                 if (viewModel.currentMode == MainViewModel.AppMode.LIVE) {
@@ -184,16 +188,18 @@ fun MainScreen(
                 } else {
                     vodGridState.scrollToItem(0)
                 }
-            } catch (e: Exception) {}
-            
-            if ((viewModel.currentMode == MainViewModel.AppMode.LIVE && viewModel.channels.isNotEmpty()) ||
-                (viewModel.currentMode == MainViewModel.AppMode.VOD && viewModel.vodMovies.isNotEmpty()) ||
-                (viewModel.currentMode == MainViewModel.AppMode.SERIES && viewModel.seriesList.isNotEmpty())) {
-                try {
-                    contentFocusRequester.requestFocus()
-                } catch (e: Exception) {
-                    Log.e("MainScreen", "Focus request failed", e)
+                
+                // Try requesting focus multiple times as composition might be in progress
+                repeat(5) {
+                    try {
+                        contentFocusRequester.requestFocus()
+                        return@repeat
+                    } catch (e: Exception) {
+                        kotlinx.coroutines.delay(50)
+                    }
                 }
+            } catch (e: Exception) {
+                Log.e("MainScreen", "Failed to focus content", e)
             }
         }
     }
@@ -442,7 +448,7 @@ fun MainScreen(
                                 modifier = Modifier
                                     .size(64.dp)
                                     .padding(vertical = 4.dp)
-                                    .then(if (index == 0) Modifier.focusRequester(railFocusRequester) else Modifier),
+                                    .then(if (isSelected) Modifier.focusRequester(railFocusRequester) else Modifier),
                                 colors = ClickableSurfaceDefaults.colors(
                                     containerColor = if (isSelected) Turquoise.copy(alpha = 0.2f) else Color.Transparent,
                                     focusedContainerColor = Turquoise,
@@ -525,15 +531,6 @@ fun MainScreen(
                             .weight(0.9f)
                             .fillMaxHeight()
                             .background(Color.Black.copy(alpha = 0.2f))
-                            .focusProperties {
-                                exit = { focusDirection ->
-                                    when (focusDirection) {
-                                        FocusDirection.Left -> railFocusRequester
-                                        FocusDirection.Right -> contentFocusRequester
-                                        else -> FocusRequester.Default
-                                    }
-                                }
-                            }
                     ) {
                         Text(
                             text = stringResource(R.string.categories),
@@ -542,6 +539,12 @@ fun MainScreen(
                             color = Color.Gray,
                             letterSpacing = 2.sp
                         )
+                        val hasContent = when (viewModel.currentMode) {
+                            MainViewModel.AppMode.LIVE -> viewModel.channels.isNotEmpty()
+                            MainViewModel.AppMode.VOD -> viewModel.vodMovies.isNotEmpty()
+                            MainViewModel.AppMode.SERIES -> viewModel.seriesList.isNotEmpty()
+                        }
+                        
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),
                             state = categoryListState
@@ -557,6 +560,22 @@ fun MainScreen(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(horizontal = 8.dp, vertical = 2.dp)
+                                        .focusProperties {
+                                            // Dynamic exit property: Only allow moving right if there's content to move to
+                                            if (FocusDirection.Right == FocusDirection.Right) {
+                                                exit = { dir ->
+                                                    if (dir == FocusDirection.Right && !hasContent) {
+                                                        FocusRequester.Cancel
+                                                    } else if (dir == FocusDirection.Right) {
+                                                        contentFocusRequester
+                                                    } else if (dir == FocusDirection.Left) {
+                                                        railFocusRequester
+                                                    } else {
+                                                        FocusRequester.Default
+                                                    }
+                                                }
+                                            }
+                                        }
                                         .then(if (isSelected) Modifier.focusRequester(categoryFocusRequester) else Modifier),
                                     colors = ClickableSurfaceDefaults.colors(
                                         containerColor = if (isSelected) Color(0xFF2A2A2A) else Color.Transparent,
