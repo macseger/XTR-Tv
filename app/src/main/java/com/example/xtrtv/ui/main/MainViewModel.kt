@@ -98,6 +98,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     var isEpgUpdating by mutableStateOf(false)
     var backgroundStatus by mutableStateOf<String?>(null)
     private var isMappingEpg = false
+    var isBackgroundSyncing by mutableStateOf(false)
+        private set
+    var backgroundSyncMessage by mutableStateOf<String?>(null)
+        private set
+        
     var isTunnelingEnabled by mutableStateOf(false)
     var isFrameRateMatchingEnabled by mutableStateOf(false)
     var subtitleTracks by mutableStateOf<List<TrackInfo>>(emptyList())
@@ -130,87 +135,127 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val data = userData ?: return
         viewModelScope.launch {
             try {
-                val isFirstSync = categories.isEmpty()
-                // 1. First Priority: Live Categories & Channels
-                backgroundStatus = getApplication<Application>().getString(R.string.loading) + " " + getApplication<Application>().getString(R.string.live).lowercase()
-                if (isFirstSync) isLoading = true
+                // 1. Priority: Get minimal UI data immediately from DB or API
+                val hasCategories = withContext(Dispatchers.IO) { dao.getCategoriesByType("live").isNotEmpty() }
                 
-                val apiService = ApiClient.createService(data.url)
-                val catResp = apiService.getLiveCategories(data.username, data.password)
-                if (catResp.isSuccessful) {
-                    val apiCategories = catResp.body() ?: emptyList()
-                    val finalCats = apiCategories.map { Category(it.id, cleanCategoryName(it.name), "live") }
+                if (!hasCategories) {
+                    // Very first start - get essentials fast
+                    isLoading = true
+                    backgroundStatus = getApplication<Application>().getString(R.string.loading)
                     
-                    withContext(Dispatchers.IO) {
-                        dao.insertCategories(apiCategories.map { CategoryEntity(it.id, it.name, "live") })
-                    }
-                    
-                    // Update UI state
-                    categories = finalCats
-                    
-                    if (categories.isNotEmpty()) {
-                        // Load first category channels immediately
-                        val firstCat = categories.first()
-                        selectedCategory = firstCat
-                        val streamResp = apiService.getLiveStreams(data.username, data.password, categoryId = firstCat.id)
-                        if (streamResp.isSuccessful) {
-                            val apiStreams = streamResp.body() ?: emptyList()
-                            
-                            withContext(Dispatchers.IO) {
-                                dao.insertStreams(apiStreams.map { 
-                                    StreamEntity(it.streamId, it.name, it.streamIcon, it.categoryId, it.num, it.epgChannelId)
-                                })
+                    val apiService = ApiClient.createService(data.url)
+                    val catResp = apiService.getLiveCategories(data.username, data.password)
+                    if (catResp.isSuccessful) {
+                        val apiCategories = catResp.body() ?: emptyList()
+                        withContext(Dispatchers.IO) {
+                            dao.insertCategories(apiCategories.map { CategoryEntity(it.id, it.name, "live") })
+                        }
+                        categories = apiCategories.map { Category(it.id, cleanCategoryName(it.name), "live") }
+                        
+                        if (categories.isNotEmpty()) {
+                            val firstCat = categories.first()
+                            selectedCategory = firstCat
+                            val streamResp = apiService.getLiveStreams(data.username, data.password, categoryId = firstCat.id)
+                            if (streamResp.isSuccessful) {
+                                val apiStreams = streamResp.body() ?: emptyList()
+                                withContext(Dispatchers.IO) {
+                                    dao.insertStreams(apiStreams.map { 
+                                        StreamEntity(it.streamId, it.name, it.streamIcon, it.categoryId, it.num, it.epgChannelId)
+                                    })
+                                }
+                                channels = apiStreams.sortedBy { it.num ?: it.streamId }
+                                if (currentChannel == null && channels.isNotEmpty()) playChannel(channels.first())
                             }
-                            
-                            channels = apiStreams
-                            // Trigger UI to show channels
-                            onChannelsReady()
-                            
-                            // Try to auto-play first channel if nothing is playing
-                            if (currentChannel == null && channels.isNotEmpty()) playChannel(channels.first())
                         }
                     }
                 }
+                
+                // Let the UI show up
+                onChannelsReady()
                 isLoading = false
+                backgroundStatus = null
                 
-                // 2. Second Priority: EPG (Background)
-                backgroundStatus = getApplication<Application>().getString(R.string.updating_epg)
-                isEpgUpdating = true
-                fetchEpgFromApi() // This runs in its own IO scope
-                
-                // 3. Third Priority: VOD/Series Categories & Content (Background)
-                backgroundStatus = getApplication<Application>().getString(R.string.loading) + " " + getApplication<Application>().getString(R.string.movies).lowercase() + "/" + getApplication<Application>().getString(R.string.series).lowercase()
-                
-                // Sync VOD Categories
-                val vCatResp = apiService.getVodCategories(data.username, data.password)
-                if (vCatResp.isSuccessful) {
-                    val vCats = vCatResp.body() ?: emptyList()
-                    withContext(Dispatchers.IO) {
-                        dao.insertCategories(vCats.map { CategoryEntity(it.id, it.name, "vod") })
-                    }
+                // 2. Background Sync: Start a "gentle" sync if needed
+                if (isSyncNeeded()) {
+                    startGentleBackgroundSync()
                 }
-                
-                // Sync Series Categories
-                val sCatResp = apiService.getSeriesCategories(data.username, data.password)
-                if (sCatResp.isSuccessful) {
-                    val sCats = sCatResp.body() ?: emptyList()
-                    withContext(Dispatchers.IO) {
-                        dao.insertCategories(sCats.map { CategoryEntity(it.id, it.name, "series") })
-                    }
-                }
-                
-                // Finally, full sync in background
-                syncAllContent(force = true)
-                
-                // Save sync time
-                prefs.lastFullSync = System.currentTimeMillis()
                 
             } catch (e: Exception) {
                 Log.e(TAG, "Error during initial sync", e)
+                onChannelsReady()
             } finally {
-                backgroundStatus = null
                 isLoading = false
-                isEpgUpdating = false
+                backgroundStatus = null
+            }
+        }
+    }
+
+    private fun startGentleBackgroundSync() {
+        if (isBackgroundSyncing) return
+        
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                isBackgroundSyncing = true
+                val data = userData ?: return@launch
+                val apiService = ApiClient.createService(data.url)
+                
+                // A. Sync VOD/Series Categories first (Small metadata)
+                backgroundSyncMessage = getApplication<Application>().getString(R.string.loading) + "..."
+                
+                val vCatResp = apiService.getVodCategories(data.username, data.password)
+                if (vCatResp.isSuccessful) {
+                    dao.insertCategories(vCatResp.body()?.map { CategoryEntity(it.id, it.name, "vod") } ?: emptyList())
+                }
+                
+                val sCatResp = apiService.getSeriesCategories(data.username, data.password)
+                if (sCatResp.isSuccessful) {
+                    dao.insertCategories(sCatResp.body()?.map { CategoryEntity(it.id, it.name, "series") } ?: emptyList())
+                }
+
+                // B. Sync Content in small chunks with delays (The "Gentle" part)
+                // This populates the search and VOD/Series views without lagging the UI
+                
+                // Throttled VOD Sync
+                val vodResp = apiService.getVodStreams(data.username, data.password)
+                if (vodResp.isSuccessful) {
+                    val movies = vodResp.body() ?: emptyList()
+                    val chunks = movies.chunked(100)
+                    chunks.forEachIndexed { index, chunk ->
+                        backgroundSyncMessage = "Syncing VOD: ${((index + 1) * 100 * 100 / movies.size).coerceAtMost(100)}%"
+                        dao.insertVod(chunk.map { 
+                            VodEntity(it.streamId, it.name, it.streamIcon, it.categoryId, it.rating, it.containerExtension, it.added)
+                        })
+                        kotlinx.coroutines.delay(200) // Breather for DB/UI
+                    }
+                }
+
+                // Throttled Series Sync
+                val seriesResp = apiService.getSeries(data.username, data.password)
+                if (seriesResp.isSuccessful) {
+                    val seriesList = seriesResp.body() ?: emptyList()
+                    val chunks = seriesList.chunked(100)
+                    chunks.forEachIndexed { index, chunk ->
+                        backgroundSyncMessage = "Syncing Series: ${((index + 1) * 100 * 100 / seriesList.size).coerceAtMost(100)}%"
+                        dao.insertSeries(chunk.map { 
+                            SeriesEntity(it.seriesId, it.name, it.cover, it.categoryId, it.rating, it.plot)
+                        })
+                        kotlinx.coroutines.delay(200) // Breather for DB/UI
+                    }
+                }
+
+                // C. Finally EPG
+                backgroundSyncMessage = getApplication<Application>().getString(R.string.updating_epg)
+                fetchEpgFromApi() // Already has batching
+
+                prefs.lastFullSync = System.currentTimeMillis()
+                backgroundSyncMessage = "Update Complete!"
+                kotlinx.coroutines.delay(3000)
+                backgroundSyncMessage = null
+            } catch (e: Exception) {
+                Log.e(TAG, "Background sync failed", e)
+            } finally {
+                isBackgroundSyncing = false
+                backgroundSyncMessage = null
             }
         }
     }
@@ -404,86 +449,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private suspend fun syncAllContent(force: Boolean = false) = withContext(Dispatchers.IO) {
-        val data = userData ?: return@withContext
-        
-        if (!force) {
-            // Check if we already have content to avoid massive sync on every start
-            val vodCount = dao.getVodCount()
-            val seriesCount = dao.getSeriesCount()
-            
-            // Only sync if empty or if it was a long time ago (manual refresh handles the rest)
-            if (vodCount > 0 && seriesCount > 0) {
-                Log.d(TAG, "Sync: Content already exists (VOD: $vodCount, Series: $seriesCount), skipping full sync")
-                return@withContext
-            }
-        }
-
-        try {
-            val apiService = ApiClient.createService(data.url)
-            
-            // 1. Fetch categories first to ensure we can iterate if "fetch all" fails
-            val vodCats = dao.getCategoriesByType("vod")
-            val seriesCats = dao.getCategoriesByType("series")
-
-            // Try to fetch ALL VOD first (faster if supported)
-            val vodResp = apiService.getVodStreams(data.username, data.password)
-            if (vodResp.isSuccessful && !vodResp.body().isNullOrEmpty()) {
-                val movies = vodResp.body()!!
-                val entities = movies.map { 
-                    VodEntity(it.streamId, it.name, it.streamIcon, it.categoryId, it.rating, it.containerExtension, it.added)
-                }
-                entities.chunked(500).forEach { dao.insertVod(it) }
-                Log.d(TAG, "Sync: Successfully fetched all ${movies.size} VODs at once")
-            } else {
-                // Fallback: Fetch per category
-                Log.d(TAG, "Sync: 'Fetch all VOD' failed or empty, falling back to per-category fetch")
-                vodCats.forEach { cat ->
-                    val resp = apiService.getVodStreams(data.username, data.password, categoryId = cat.id)
-                    if (resp.isSuccessful) {
-                        resp.body()?.let { movies ->
-                            val entities = movies.map { 
-                                VodEntity(it.streamId, it.name, it.streamIcon, it.categoryId, it.rating, it.containerExtension, it.added)
-                            }
-                            entities.chunked(500).forEach { dao.insertVod(it) }
-                        }
-                    }
-                }
-            }
-
-            // Try to fetch ALL Series first
-            val seriesResp = apiService.getSeries(data.username, data.password)
-            if (seriesResp.isSuccessful && !seriesResp.body().isNullOrEmpty()) {
-                val series = seriesResp.body()!!
-                val entities = series.map { 
-                    SeriesEntity(it.seriesId, it.name, it.cover, it.categoryId, it.rating, it.plot)
-                }
-                entities.chunked(500).forEach { dao.insertSeries(it) }
-                Log.d(TAG, "Sync: Successfully fetched all ${series.size} series at once")
-            } else {
-                // Fallback: Fetch per category
-                Log.d(TAG, "Sync: 'Fetch all Series' failed or empty, falling back to per-category fetch")
-                seriesCats.forEach { cat ->
-                    val resp = apiService.getSeries(data.username, data.password, categoryId = cat.id)
-                    if (resp.isSuccessful) {
-                        resp.body()?.let { series ->
-                            val entities = series.map { 
-                                SeriesEntity(it.seriesId, it.name, it.cover, it.categoryId, it.rating, it.plot)
-                            }
-                            entities.chunked(500).forEach { dao.insertSeries(it) }
-                        }
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error syncing all content", e)
-        }
+    private suspend fun syncAllContent(force: Boolean = false) {
+        // Not used anymore in favor of startGentleBackgroundSync
+        // but keeping it as a stub if needed for manual force refresh
     }
 
     private fun fetchAllContentForSearch() {
-        viewModelScope.launch {
-            syncAllContent()
-        }
+        // Handled by background sync
     }
 
     fun forceUpdateChannels() {
@@ -711,6 +683,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun selectCategory(category: Category, forceRefresh: Boolean = false) {
+        if (selectedCategory?.id == category.id && !forceRefresh && 
+            ((currentMode == AppMode.VOD && vodMovies.isNotEmpty()) || 
+             (currentMode == AppMode.SERIES && seriesList.isNotEmpty()) ||
+             (currentMode == AppMode.LIVE && channels.isNotEmpty()))) {
+            return // Avoid reloading same category
+        }
+        
         selectedCategory = category
 
         viewModelScope.launch {
@@ -722,17 +701,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         }
                     }
                     if (cachedStreams.isNotEmpty() && !forceRefresh) {
-                        channels = cachedStreams.sortedBy { it.num ?: it.streamId }
+                        channels = withContext(Dispatchers.Default) {
+                            cachedStreams.sortedBy { it.num ?: it.streamId }
+                        }
                         refreshEpgMap()
                         
-                        // Check if we should auto-play the last channel or the first in list
+                        // Check if we should auto-play
                         if (currentChannel == null && channels.isNotEmpty()) {
                             val lastId = prefs.lastChannelId
                             val lastChannel = channels.find { it.streamId == lastId }
                             if (lastChannel != null) {
                                 playChannel(lastChannel)
                             } else if (category.id != "history") { 
-                                // Only auto-play first if not in a history/special category to avoid confusion
                                 playChannel(channels.first())
                             }
                         }
@@ -749,12 +729,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         }
                     } else {
                         val cachedVod = withContext(Dispatchers.IO) {
-                            dao.getVodByCategory(category.id).map {
-                                VodMovie(it.streamId, it.name, it.streamIcon, it.categoryId, it.rating, it.added, it.containerExtension)
-                            }
+                            dao.getVodByCategory(category.id)
                         }
+                        
                         if (cachedVod.isNotEmpty() && !forceRefresh) {
-                            vodMovies = cachedVod
+                            vodMovies = withContext(Dispatchers.Default) {
+                                cachedVod.map {
+                                    VodMovie(it.streamId, it.name, it.streamIcon, it.categoryId, it.rating, it.added, it.containerExtension)
+                                }.sortedByDescending { it.streamId }
+                            }
                         } else {
                             fetchVodMovies(category.id)
                         }
@@ -771,12 +754,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         }
                     } else {
                         val cachedSeries = withContext(Dispatchers.IO) {
-                            dao.getSeriesByCategory(category.id).map {
-                                Series(it.seriesId, it.name, it.cover, it.plot, null, null, null, null, it.rating, it.categoryId)
-                            }
+                            dao.getSeriesByCategory(category.id)
                         }
                         if (cachedSeries.isNotEmpty() && !forceRefresh) {
-                            seriesList = cachedSeries
+                            seriesList = withContext(Dispatchers.Default) {
+                                cachedSeries.map {
+                                    Series(it.seriesId, it.name, it.cover, it.plot, null, null, null, null, it.rating, it.categoryId)
+                                }.sortedByDescending { it.seriesId }
+                            }
                         } else {
                             fetchSeries(category.id)
                         }
@@ -795,7 +780,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val response = apiService.getLiveStreams(data.username, data.password, categoryId = categoryId)
                 if (response.isSuccessful) {
                     val apiStreams = response.body() ?: emptyList()
-                    channels = apiStreams
+                    channels = withContext(Dispatchers.Default) {
+                        apiStreams.sortedBy { it.num ?: it.streamId }
+                    }
                     withContext(Dispatchers.IO) {
                         dao.insertStreams(apiStreams.map { 
                             StreamEntity(it.streamId, it.name, it.streamIcon, it.categoryId, it.num, it.epgChannelId)
@@ -820,7 +807,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val response = apiService.getVodStreams(data.username, data.password, categoryId = categoryId)
                 if (response.isSuccessful) {
                     val movies = response.body() ?: emptyList()
-                    vodMovies = movies.sortedByDescending { it.streamId }
+                    vodMovies = withContext(Dispatchers.Default) {
+                        movies.sortedByDescending { it.streamId }
+                    }
                     withContext(Dispatchers.IO) {
                         dao.insertVod(movies.map { 
                             VodEntity(it.streamId, it.name, it.streamIcon, it.categoryId, it.rating, it.containerExtension, it.added)
@@ -844,7 +833,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val response = apiService.getSeries(data.username, data.password, categoryId = categoryId)
                 if (response.isSuccessful) {
                     val apiSeries = response.body() ?: emptyList()
-                    seriesList = apiSeries.sortedByDescending { it.seriesId }
+                    seriesList = withContext(Dispatchers.Default) {
+                        apiSeries.sortedByDescending { it.seriesId }
+                    }
                     withContext(Dispatchers.IO) {
                         dao.insertSeries(apiSeries.map { 
                             SeriesEntity(it.seriesId, it.name, it.cover, it.categoryId, it.rating, it.plot)

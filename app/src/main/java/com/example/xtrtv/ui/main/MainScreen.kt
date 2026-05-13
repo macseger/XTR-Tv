@@ -88,6 +88,7 @@ fun MainScreen(
     var showUrlDialog by remember { mutableStateOf(false) }
     var lastInteractionTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var focusContentTrigger by remember { mutableIntStateOf(0) }
+    var focusPlayingNow by remember { mutableStateOf(true) }
     
     // Derived state for better performance - avoids full recomposition on every sub-state change
     val isAnyOverlayVisible by remember {
@@ -117,6 +118,10 @@ fun MainScreen(
     val contextMenuFocusRequester = remember { FocusRequester() }
     val playbackFocusRequester = remember { FocusRequester() }
 
+    val playingIndex = remember(viewModel.channels, viewModel.currentChannel) {
+        viewModel.channels.indexOfFirst { it.streamId == viewModel.currentChannel?.streamId }
+    }
+
     LaunchedEffect(userData) {
         viewModel.init(context, userData)
         
@@ -131,9 +136,20 @@ fun MainScreen(
 
     LaunchedEffect(showChannelList) {
         if (showChannelList && !showContextMenu && !showSeriesDetails && !showSearchOverlay) {
+            focusPlayingNow = true
             kotlinx.coroutines.yield()
-            // Always start focus on the rail for better TV UX predictability
-            railFocusRequester.requestFocus()
+            
+            if (viewModel.currentMode == MainViewModel.AppMode.LIVE && playingIndex >= 0) {
+                try {
+                    channelListState.scrollToItem(playingIndex)
+                    contentFocusRequester.requestFocus()
+                } catch (e: Exception) {
+                    railFocusRequester.requestFocus()
+                }
+            } else {
+                // Always start focus on the rail for better TV UX predictability
+                railFocusRequester.requestFocus()
+            }
         }
     }
 
@@ -145,6 +161,9 @@ fun MainScreen(
 
     LaunchedEffect(focusContentTrigger) {
         if (focusContentTrigger > 0 && showChannelList) {
+            // Give time for the list to update and then move focus to content
+            kotlinx.coroutines.delay(300)
+            
             // Reset scroll positions to ensure the first item is visible before focusing
             try {
                 if (viewModel.currentMode == MainViewModel.AppMode.LIVE) {
@@ -153,9 +172,6 @@ fun MainScreen(
                     vodGridState.scrollToItem(0)
                 }
             } catch (_: Exception) {}
-            
-            // Give time for the list to update and then move focus to content
-            kotlinx.coroutines.delay(200)
             
             if ((viewModel.currentMode == MainViewModel.AppMode.LIVE && viewModel.channels.isNotEmpty()) ||
                 (viewModel.currentMode == MainViewModel.AppMode.VOD && viewModel.vodMovies.isNotEmpty()) ||
@@ -405,7 +421,11 @@ fun MainScreen(
                         modes.forEachIndexed { index, (mode, icon, label) ->
                             val isSelected = viewModel.currentMode == mode
                             Surface(
-                                onClick = { viewModel.changeMode(mode) },
+                                onClick = { 
+                                    viewModel.changeMode(mode)
+                                    focusPlayingNow = false
+                                    focusContentTrigger++
+                                },
                                 modifier = Modifier
                                     .size(64.dp)
                                     .padding(vertical = 4.dp)
@@ -518,6 +538,7 @@ fun MainScreen(
                                 Surface(
                                     onClick = { 
                                         viewModel.selectCategory(category)
+                                        focusPlayingNow = false
                                         focusContentTrigger++
                                     },
                                     modifier = Modifier
@@ -607,7 +628,13 @@ fun MainScreen(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .padding(vertical = 4.dp)
-                                            .then(if (index == 0) Modifier.focusRequester(contentFocusRequester) else Modifier),
+                                            .then(
+                                                if (focusPlayingNow && playingIndex >= 0) {
+                                                    if (index == playingIndex) Modifier.focusRequester(contentFocusRequester) else Modifier
+                                                } else {
+                                                    if (index == 0) Modifier.focusRequester(contentFocusRequester) else Modifier
+                                                }
+                                            ),
                                         colors = ClickableSurfaceDefaults.colors(
                                             containerColor = if (isPlaying) Color(0xFF1E1E1E) else Color.Transparent,
                                             focusedContainerColor = Color(0xFF2A2A2A),
@@ -712,7 +739,8 @@ fun MainScreen(
                                     if (viewModel.currentMode == MainViewModel.AppMode.VOD) {
                                         itemsIndexed(
                                             items = viewModel.vodMovies,
-                                            key = { _, movie -> movie.streamId }
+                                            key = { _, movie -> movie.streamId },
+                                            contentType = { _, _ -> "movie" }
                                         ) { index, movie ->
                                             VodCard(
                                                 title = movie.name,
@@ -729,7 +757,8 @@ fun MainScreen(
                                     } else {
                                         itemsIndexed(
                                             items = viewModel.seriesList,
-                                            key = { _, series -> series.seriesId }
+                                            key = { _, series -> series.seriesId },
+                                            contentType = { _, _ -> "series" }
                                         ) { index, series ->
                                             VodCard(
                                                 title = series.name,
@@ -921,9 +950,9 @@ fun MainScreen(
             }
         }
 
-        if (viewModel.isEpgUpdating || viewModel.isLoading || viewModel.backgroundStatus != null) {
+        if (viewModel.isEpgUpdating || viewModel.isLoading || viewModel.backgroundStatus != null || viewModel.backgroundSyncMessage != null) {
             LoadingIndicator(
-                text = viewModel.backgroundStatus ?: if (viewModel.isEpgUpdating) stringResource(R.string.updating_epg) else stringResource(R.string.loading)
+                text = viewModel.backgroundSyncMessage ?: viewModel.backgroundStatus ?: if (viewModel.isEpgUpdating) stringResource(R.string.updating_epg) else stringResource(R.string.loading)
             )
         }
 
