@@ -27,6 +27,10 @@ class Prefs(context: Context) {
         get() = prefs.getInt("last_channel_id", -1)
         set(value) = prefs.edit().putInt("last_channel_id", value).apply()
 
+    var lastFullSync: Long
+        get() = prefs.getLong("last_full_sync", 0L)
+        set(value) = prefs.edit().putLong("last_full_sync", value).apply()
+
     fun getUser(): UserData? {
         val url = prefs.getString("url", null) ?: return null
         val username = prefs.getString("username", null) ?: return null

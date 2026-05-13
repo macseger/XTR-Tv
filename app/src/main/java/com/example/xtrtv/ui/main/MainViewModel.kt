@@ -195,6 +195,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 // Finally, full sync in background
                 syncAllContent(force = true)
                 
+                // Save sync time
+                prefs.lastFullSync = System.currentTimeMillis()
+                
             } catch (e: Exception) {
                 Log.e(TAG, "Error during initial sync", e)
             } finally {
@@ -372,6 +375,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
                 // 3. Sync ALL content (this also populates the UI for the current category)
                 syncAllContent(force = true)
+                
+                // Save sync time
+                prefs.lastFullSync = System.currentTimeMillis()
                 
                 // 4. Update the UI state for the current selected category
                 selectedCategory?.let { 
@@ -1193,11 +1199,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val updatedData = data.copy(url = newUrl)
         this.userData = updatedData
         prefs.saveUser(updatedData)
+        prefs.lastFullSync = 0L // Force new sync on URL change
         
         // Refresh data from new server
         forceUpdateChannels()
         refreshVodAndSeries()
         refreshEpg()
+    }
+
+    fun isSyncNeeded(): Boolean {
+        val lastSync = prefs.lastFullSync
+        val currentTime = System.currentTimeMillis()
+        val twentyFourHoursMs = 24 * 3600 * 1000L
+        return lastSync == 0L || (currentTime - lastSync) > twentyFourHoursMs
     }
 
     override fun onCleared() {

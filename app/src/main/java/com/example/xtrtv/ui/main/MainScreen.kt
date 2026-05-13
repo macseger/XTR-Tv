@@ -102,13 +102,9 @@ fun MainScreen(
     val contentFocusRequester = remember { FocusRequester() }
 
     LaunchedEffect(userData) {
-        val needsInitialSync = withContext(kotlinx.coroutines.Dispatchers.IO) {
-            viewModel.categories.isEmpty() && viewModel.channels.isEmpty()
-        }
-        
         viewModel.init(context, userData)
         
-        if (needsInitialSync) {
+        if (viewModel.isSyncNeeded()) {
             viewModel.initialSync(onChannelsReady = {
                 showChannelList = true
             })
