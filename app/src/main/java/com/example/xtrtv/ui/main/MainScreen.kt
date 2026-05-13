@@ -1,5 +1,6 @@
 package com.example.xtrtv.ui.main
 
+import android.util.Log
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
@@ -38,10 +39,13 @@ import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.platform.LocalContext
@@ -56,6 +60,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.PlayerView
 import androidx.tv.material3.*
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.example.xtrtv.R
 import com.example.xtrtv.data.UserData
 import com.example.xtrtv.ui.components.*
@@ -64,7 +69,7 @@ import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.*
 
-@OptIn(ExperimentalTvMaterial3Api::class)
+@OptIn(ExperimentalTvMaterial3Api::class, ExperimentalComposeUiApi::class)
 @Composable
 fun MainScreen(
     userData: UserData,
@@ -82,7 +87,16 @@ fun MainScreen(
     var showLogoutDialog by remember { mutableStateOf(false) }
     var showUrlDialog by remember { mutableStateOf(false) }
     var lastInteractionTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    var focusTrigger by remember { mutableIntStateOf(0) }
+    var focusContentTrigger by remember { mutableIntStateOf(0) }
+    
+    // Derived state for better performance - avoids full recomposition on every sub-state change
+    val isAnyOverlayVisible by remember {
+        derivedStateOf {
+            showChannelList || showContextMenu || showPlaybackControls || 
+            showSeriesDetails || showSearchOverlay || showExitDialog || 
+            showLogoutDialog || showUrlDialog || viewModel.showResumeDialog
+        }
+    }
     
     // Auto-hide controls
     LaunchedEffect(showPlaybackControls, lastInteractionTime, viewModel.isPlaying) {
@@ -97,12 +111,11 @@ fun MainScreen(
     val vodGridState = rememberLazyGridState()
     
     val rootFocusRequester = remember { FocusRequester() }
-    val menuFocusRequester = remember { FocusRequester() }
-    val channelFocusRequester = remember { FocusRequester() }
-    val contextMenuFocusRequester = remember { FocusRequester() }
     val railFocusRequester = remember { FocusRequester() }
-    val playbackFocusRequester = remember { FocusRequester() }
+    val categoryFocusRequester = remember { FocusRequester() }
     val contentFocusRequester = remember { FocusRequester() }
+    val contextMenuFocusRequester = remember { FocusRequester() }
+    val playbackFocusRequester = remember { FocusRequester() }
 
     LaunchedEffect(userData) {
         viewModel.init(context, userData)
@@ -111,44 +124,47 @@ fun MainScreen(
             viewModel.initialSync(onChannelsReady = {
                 showChannelList = true
             })
+        } else {
+            showChannelList = true
         }
     }
 
-    // 2. Focus Management (Event-driven)
     LaunchedEffect(showChannelList) {
-        if (showChannelList && !showContextMenu) {
+        if (showChannelList && !showContextMenu && !showSeriesDetails && !showSearchOverlay) {
             kotlinx.coroutines.yield()
-            if (viewModel.currentMode == MainViewModel.AppMode.LIVE) {
-                val currentChannel = viewModel.currentChannel
-                val index = viewModel.channels.indexOfFirst { it.streamId == currentChannel?.streamId }
-                
-                if (index >= 0) {
-                    if (channelListState.firstVisibleItemIndex != index) {
-                        channelListState.scrollToItem(index)
-                        kotlinx.coroutines.yield()
-                    }
-                    channelFocusRequester.requestFocus()
-                } else if (viewModel.channels.isNotEmpty()) {
-                    channelFocusRequester.requestFocus()
-                }
-            } else {
-                contentFocusRequester.requestFocus()
-            }
+            // Always start focus on the rail for better TV UX predictability
+            railFocusRequester.requestFocus()
         }
     }
 
-    LaunchedEffect(viewModel.selectedCategory) {
-        if (showChannelList) {
-            // Give time for the list to update
-            kotlinx.coroutines.delay(100)
-            if (viewModel.currentMode == MainViewModel.AppMode.LIVE && viewModel.channels.isNotEmpty()) {
-                channelListState.scrollToItem(0)
-                kotlinx.coroutines.yield()
-                channelFocusRequester.requestFocus()
-            } else if (viewModel.currentMode != MainViewModel.AppMode.LIVE) {
-                vodGridState.scrollToItem(0)
-                kotlinx.coroutines.yield()
-                contentFocusRequester.requestFocus()
+    LaunchedEffect(isAnyOverlayVisible) {
+        if (!isAnyOverlayVisible) {
+            rootFocusRequester.requestFocus()
+        }
+    }
+
+    LaunchedEffect(focusContentTrigger) {
+        if (focusContentTrigger > 0 && showChannelList) {
+            // Reset scroll positions to ensure the first item is visible before focusing
+            try {
+                if (viewModel.currentMode == MainViewModel.AppMode.LIVE) {
+                    channelListState.scrollToItem(0)
+                } else {
+                    vodGridState.scrollToItem(0)
+                }
+            } catch (_: Exception) {}
+            
+            // Give time for the list to update and then move focus to content
+            kotlinx.coroutines.delay(200)
+            
+            if ((viewModel.currentMode == MainViewModel.AppMode.LIVE && viewModel.channels.isNotEmpty()) ||
+                (viewModel.currentMode == MainViewModel.AppMode.VOD && viewModel.vodMovies.isNotEmpty()) ||
+                (viewModel.currentMode == MainViewModel.AppMode.SERIES && viewModel.seriesList.isNotEmpty())) {
+                try {
+                    contentFocusRequester.requestFocus()
+                } catch (e: Exception) {
+                    Log.e("MainScreen", "Focus request failed for category ${viewModel.selectedCategory?.name}", e)
+                }
             }
         }
     }
@@ -165,18 +181,11 @@ fun MainScreen(
             showLogoutDialog -> showLogoutDialog = false
             showExitDialog -> showExitDialog = false
             viewModel.showResumeDialog -> viewModel.showResumeDialog = false
-            showSearchOverlay -> {
-                showSearchOverlay = false
-                showChannelList = false
-            }
-            showSeriesDetails -> {
-                showSeriesDetails = false
-                showChannelList = false
-            }
+            showSearchOverlay -> showSearchOverlay = false
+            showSeriesDetails -> showSeriesDetails = false
             showContextMenu -> {
                 showSubtitleMenu = false
                 showContextMenu = false
-                showChannelList = false
             }
             showPlaybackControls -> showPlaybackControls = false
             showChannelList -> showChannelList = false
@@ -198,54 +207,58 @@ fun MainScreen(
             .focusRequester(rootFocusRequester)
             .focusable()
             .onKeyEvent { event ->
-                val anyOverlayVisible = showChannelList || showContextMenu || showPlaybackControls || 
-                                       showSeriesDetails || showSearchOverlay || showExitDialog || 
-                                       showLogoutDialog || showUrlDialog || viewModel.showResumeDialog
-                
-                if (!anyOverlayVisible && event.type == KeyEventType.KeyUp) {
-                    when (event.nativeKeyEvent.keyCode) {
-                        android.view.KeyEvent.KEYCODE_DPAD_CENTER,
-                        android.view.KeyEvent.KEYCODE_ENTER,
-                        android.view.KeyEvent.KEYCODE_NUMPAD_ENTER -> {
-                            if (viewModel.activePlaybackMode == MainViewModel.AppMode.LIVE) {
-                                viewModel.changeMode(MainViewModel.AppMode.LIVE)
-                                showChannelList = true
-                            } else {
-                                // Toggle play/pause and show overlay
-                                val wasPlaying = viewModel.isPlaying
-                                viewModel.togglePlayPause()
-                                if (wasPlaying) {
-                                    showPlaybackControls = true
-                                } else {
-                                    showPlaybackControls = false
-                                }
-                                lastInteractionTime = System.currentTimeMillis()
-                            }
-                            true
+                // Global interaction tracking
+                if (event.type == KeyEventType.KeyUp) {
+                    lastInteractionTime = System.currentTimeMillis()
+                }
+
+                if (!isAnyOverlayVisible) {
+                    if (event.type == KeyEventType.KeyDown && 
+                        (event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_CENTER || 
+                         event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_ENTER)) {
+                        if (event.nativeKeyEvent.isLongPress) {
+                            showContextMenu = true
+                            return@onKeyEvent true
                         }
-                        android.view.KeyEvent.KEYCODE_DPAD_UP -> {
-                            viewModel.changeMode(viewModel.activePlaybackMode)
-                            showChannelList = true
-                            true
-                        }
-                        android.view.KeyEvent.KEYCODE_DPAD_LEFT -> {
-                            if (viewModel.activePlaybackMode != MainViewModel.AppMode.LIVE) {
-                                viewModel.skipBackward()
-                                showPlaybackControls = true
-                                lastInteractionTime = System.currentTimeMillis()
-                                true
-                            } else false
-                        }
-                        android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                            if (viewModel.activePlaybackMode != MainViewModel.AppMode.LIVE) {
-                                viewModel.skipForward()
-                                showPlaybackControls = true
-                                lastInteractionTime = System.currentTimeMillis()
-                                true
-                            } else false
-                        }
-                        else -> false
                     }
+
+                    if (event.type == KeyEventType.KeyUp) {
+                        when (event.nativeKeyEvent.keyCode) {
+                            android.view.KeyEvent.KEYCODE_DPAD_CENTER,
+                            android.view.KeyEvent.KEYCODE_ENTER,
+                            android.view.KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                                if (viewModel.activePlaybackMode == MainViewModel.AppMode.LIVE) {
+                                    viewModel.changeMode(MainViewModel.AppMode.LIVE)
+                                    showChannelList = true
+                                } else {
+                                    // Toggle play/pause and show overlay
+                                    viewModel.togglePlayPause()
+                                    showPlaybackControls = true
+                                }
+                                true
+                            }
+                            android.view.KeyEvent.KEYCODE_DPAD_UP -> {
+                                viewModel.changeMode(viewModel.activePlaybackMode)
+                                showChannelList = true
+                                true
+                            }
+                            android.view.KeyEvent.KEYCODE_DPAD_LEFT -> {
+                                if (viewModel.activePlaybackMode != MainViewModel.AppMode.LIVE) {
+                                    viewModel.skipBackward()
+                                    showPlaybackControls = true
+                                    true
+                                } else false
+                            }
+                            android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                                if (viewModel.activePlaybackMode != MainViewModel.AppMode.LIVE) {
+                                    viewModel.skipForward()
+                                    showPlaybackControls = true
+                                    true
+                                } else false
+                            }
+                            else -> false
+                        }
+                    } else false
                 } else if (showPlaybackControls && event.type == KeyEventType.KeyUp) {
                     lastInteractionTime = System.currentTimeMillis()
                     false
@@ -374,7 +387,12 @@ fun MainScreen(
                         modifier = Modifier
                             .width(100.dp)
                             .fillMaxHeight()
-                            .background(Color.Black.copy(alpha = 0.3f)),
+                            .background(Color.Black.copy(alpha = 0.3f))
+                            .focusProperties {
+                                exit = { focusDirection ->
+                                    if (focusDirection == FocusDirection.Right) categoryFocusRequester else FocusRequester.Default
+                                }
+                            },
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
                     ) {
@@ -474,6 +492,15 @@ fun MainScreen(
                             .weight(0.9f)
                             .fillMaxHeight()
                             .background(Color.Black.copy(alpha = 0.2f))
+                            .focusProperties {
+                                exit = { focusDirection ->
+                                    when (focusDirection) {
+                                        FocusDirection.Left -> railFocusRequester
+                                        FocusDirection.Right -> contentFocusRequester
+                                        else -> FocusRequester.Default
+                                    }
+                                }
+                            }
                     ) {
                         Text(
                             text = stringResource(R.string.categories),
@@ -486,17 +513,17 @@ fun MainScreen(
                             modifier = Modifier.fillMaxSize(),
                             state = categoryListState
                         ) {
-                            items(viewModel.categories) { category ->
-                                val isSelected = viewModel.selectedCategory == category
+                            items(viewModel.categories, key = { it.id }) { category ->
+                                val isSelected = viewModel.selectedCategory?.id == category.id
                                 Surface(
                                     onClick = { 
                                         viewModel.selectCategory(category)
-                                        focusTrigger++
+                                        focusContentTrigger++
                                     },
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(horizontal = 8.dp, vertical = 2.dp)
-                                        .then(if (isSelected) Modifier.focusRequester(menuFocusRequester) else Modifier),
+                                        .then(if (isSelected) Modifier.focusRequester(categoryFocusRequester) else Modifier),
                                     colors = ClickableSurfaceDefaults.colors(
                                         containerColor = if (isSelected) Color(0xFF2A2A2A) else Color.Transparent,
                                         focusedContainerColor = Turquoise,
@@ -517,8 +544,15 @@ fun MainScreen(
 
                     Box(modifier = Modifier.width(1.dp).fillMaxHeight().background(Color.DarkGray))
 
-                    // Content Area
-                    Column(modifier = Modifier.weight(3f)) {
+                    Column(
+                        modifier = Modifier
+                            .weight(3f)
+                            .focusProperties {
+                                exit = { focusDirection ->
+                                    if (focusDirection == FocusDirection.Left) categoryFocusRequester else FocusRequester.Default
+                                }
+                            }
+                    ) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -549,6 +583,7 @@ fun MainScreen(
                         }
 
                         if (viewModel.currentMode == MainViewModel.AppMode.LIVE) {
+                            val timeFormat = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
                             LazyColumn(
                                 modifier = Modifier
                                     .fillMaxSize()
@@ -559,8 +594,7 @@ fun MainScreen(
                                     items = viewModel.channels,
                                     key = { _, stream -> stream.streamId }
                                 ) { index, stream ->
-                                    val isPlaying = viewModel.currentChannel == stream
-                                    val isFirst = index == 0
+                                    val isPlaying = viewModel.currentChannel?.streamId == stream.streamId
                                     val epgEntry = viewModel.epgMap[stream.streamId]
 
                                     Surface(
@@ -573,12 +607,7 @@ fun MainScreen(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .padding(vertical = 4.dp)
-                                            .then(
-                                                if (isPlaying) Modifier.focusRequester(channelFocusRequester) 
-                                                else if (isFirst && viewModel.channels.none { it.streamId == viewModel.currentChannel?.streamId }) 
-                                                    Modifier.focusRequester(channelFocusRequester) 
-                                                else Modifier
-                                            ),
+                                            .then(if (index == 0) Modifier.focusRequester(contentFocusRequester) else Modifier),
                                         colors = ClickableSurfaceDefaults.colors(
                                             containerColor = if (isPlaying) Color(0xFF1E1E1E) else Color.Transparent,
                                             focusedContainerColor = Color(0xFF2A2A2A),
@@ -596,7 +625,10 @@ fun MainScreen(
                                         ) {
                                             // Picon
                                             AsyncImage(
-                                                model = stream.streamIcon,
+                                                model = ImageRequest.Builder(LocalContext.current)
+                                                    .data(stream.streamIcon)
+                                                    .crossfade(true)
+                                                    .build(),
                                                 contentDescription = null,
                                                 modifier = Modifier
                                                     .size(40.dp)
@@ -628,8 +660,7 @@ fun MainScreen(
                                                     )
                                                     
                                                     val timeRange = remember(epgEntry) {
-                                                        val sdf = SimpleDateFormat("HH:mm", Locale.getDefault())
-                                                        "${sdf.format(Date(epgEntry.start))} - ${sdf.format(Date(epgEntry.stop))}"
+                                                        "${timeFormat.format(Date(epgEntry.start))} - ${timeFormat.format(Date(epgEntry.stop))}"
                                                     }
                                                     
                                                     Row(

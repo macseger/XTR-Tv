@@ -36,8 +36,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
-        // Terminate app when user presses Home or switches apps
-        finish()
     }
 }
 
