@@ -57,4 +57,8 @@
     <string name="update_not_available">Du har den senaste versionen.</string>
     <string name="check_update_error">Kunde inte kolla efter uppdateringar.</string>
     <string name="version_label">Version: %1$s</string>
+    <string name="next_episode_title">Avsnittet är slut</string>
+    <string name="next_episode_desc">Vill du se nästa avsnitt?</string>
+    <string name="watch_next">Se nästa</string>
+    <string name="close">Stäng</string>
 </resources>

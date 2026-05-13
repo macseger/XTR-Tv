@@ -41,8 +41,20 @@ fun SeriesDetailsOverlay(
     val continueFocusRequester = remember { FocusRequester() }
 
     // Reset season when series details change
-    LaunchedEffect(details?.info?.name) {
-        selectedSeason = details?.episodes?.keys?.firstOrNull()
+    LaunchedEffect(details?.info?.name, viewModel.lastWatchedEpisode) {
+        val lastEp = viewModel.lastWatchedEpisode
+        if (lastEp != null && details?.episodes != null) {
+            val season = details.episodes.entries.find { entry -> 
+                entry.value.any { it.id == lastEp.id } 
+            }?.key
+            if (season != null) {
+                selectedSeason = season
+                return@LaunchedEffect
+            }
+        }
+        if (selectedSeason == null) {
+            selectedSeason = details?.episodes?.keys?.firstOrNull()
+        }
     }
 
     Box(
@@ -166,6 +178,11 @@ fun SeriesDetailsOverlay(
 
                     // Episodes List
                     val episodes = details.episodes?.get(selectedSeason) ?: emptyList()
+                    val initialFocusIndex = remember(episodes, lastEp) {
+                        val idx = episodes.indexOfFirst { it.id == lastEp?.id }
+                        if (idx != -1) idx else 0
+                    }
+
                     LazyColumn(
                         modifier = Modifier.weight(1f).fillMaxWidth(),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -175,7 +192,7 @@ fun SeriesDetailsOverlay(
                                 onClick = { onPlayEpisode(episode) },
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .then(if (index == 0) Modifier.focusRequester(focusRequester) else Modifier),
+                                    .then(if (index == initialFocusIndex) Modifier.focusRequester(focusRequester) else Modifier),
                                 colors = ClickableSurfaceDefaults.colors(
                                     containerColor = Color(0xFF1A1A1A),
                                     focusedContainerColor = Color.White,
@@ -213,9 +230,7 @@ fun SeriesDetailsOverlay(
                     }
                     
                     LaunchedEffect(selectedSeason) {
-                        if (targetEpisode != null) {
-                            continueFocusRequester.requestFocus()
-                        } else if (episodes.isNotEmpty()) {
+                        if (episodes.isNotEmpty()) {
                             focusRequester.requestFocus()
                         }
                     }

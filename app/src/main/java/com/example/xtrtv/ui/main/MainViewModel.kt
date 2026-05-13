@@ -131,6 +131,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     var isCheckingUpdate by mutableStateOf(false)
     var latestRelease by mutableStateOf<GithubRelease?>(null)
 
+    var showNextEpisodeDialog by mutableStateOf(false)
+    var nextEpisode: com.example.xtrtv.api.Episode? = null
+
     private var categoryLoadJob: kotlinx.coroutines.Job? = null
     private var syncJob: kotlinx.coroutines.Job? = null
 
@@ -340,6 +343,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 override fun onPlaybackStateChanged(state: Int) {
                     if (state == androidx.media3.common.Player.STATE_READY) {
                         playbackDuration = duration.coerceAtLeast(0L)
+                    } else if (state == androidx.media3.common.Player.STATE_ENDED) {
+                        if (activePlaybackMode == AppMode.SERIES) {
+                            handleSeriesEnded()
+                        }
                     }
                 }
 
@@ -611,9 +618,42 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun changeMode(mode: AppMode) {
-        if (currentMode == mode) return
+        val oldMode = currentMode
+        
+        // If switching to LIVE from a VOD/Series playback, stop player and restart last channel
+        if (mode == AppMode.LIVE && activePlaybackMode != AppMode.LIVE) {
+            player?.stop()
+            player?.clearMediaItems()
+            activePlaybackMode = AppMode.LIVE
+            playLastChannel()
+        }
+        
+        if (oldMode == mode) return
         currentMode = mode
         loadInitialData()
+    }
+
+    fun playLastChannel() {
+        val lastId = prefs.lastChannelId
+        Log.d(TAG, "playLastChannel called, lastId: $lastId")
+        if (lastId == -1) return
+        
+        // Ensure we are in LIVE mode state
+        activePlaybackMode = AppMode.LIVE
+
+        viewModelScope.launch(Dispatchers.IO) {
+            val entity = dao.getStreamById(lastId)
+            withContext(Dispatchers.Main) {
+                if (entity != null) {
+                    val stream = com.example.xtrtv.api.LiveStream(
+                        entity.streamId, entity.name, entity.streamIcon, entity.categoryId, entity.num, entity.epgChannelId
+                    )
+                    playChannel(stream)
+                } else {
+                    Log.d(TAG, "Last channel entity not found, falling back to first available if in LIVE mode")
+                }
+            }
+        }
     }
 
     private fun loadInitialData() {
@@ -889,6 +929,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         pendingMovie = movie
         activePlaybackMode = AppMode.VOD // Set active playback mode
         currentSeriesId = null
+        currentChannel = null // Clear current channel when playing VOD
         
         viewModelScope.launch {
             // Stop current playback to release resources
@@ -965,6 +1006,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         activePlaybackMode = AppMode.SERIES // Set active playback mode
         currentSeriesId = selectedSeries?.seriesId
         pendingEpisode = episode
+        lastWatchedEpisode = episode // Mark as last watched for UI focus
+        currentChannel = null // Clear current channel when playing series
         
         // Stop current playback
         player?.stop()
@@ -1037,11 +1080,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         player?.clearMediaItems()
         
         val baseUrl = data.url.removeSuffix("/")
-        val streamUrl = "$baseUrl/live/${data.username}/${data.password}/${stream.streamId}.ts"
+        // Försök tvinga m3u8-format för live om .ts krånglar
+        val streamUrl = "$baseUrl/live/${data.username}/${data.password}/${stream.streamId}.m3u8"
         
         val mediaItem = MediaItem.Builder()
             .setUri(streamUrl)
-            .setMimeType(MimeTypes.VIDEO_MP2T)
             .build()
         
         player?.setMediaItem(mediaItem)
@@ -1243,6 +1286,38 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             } finally {
                 isCheckingUpdate = false
             }
+        }
+    }
+
+    private fun handleSeriesEnded() {
+        val current = pendingEpisode ?: return
+        val details = seriesDetails ?: return
+        
+        // Find next episode
+        var foundNext = false
+        details.episodes?.values?.flatten()?.let { allEpisodes ->
+            val currentIndex = allEpisodes.indexOfFirst { it.id == current.id }
+            if (currentIndex != -1 && currentIndex < allEpisodes.size - 1) {
+                nextEpisode = allEpisodes[currentIndex + 1]
+                foundNext = true
+            }
+        }
+        
+        if (foundNext) {
+            showNextEpisodeDialog = true
+        } else {
+            // End of series, just go back
+            viewModelScope.launch(Dispatchers.Main) {
+                changeMode(activePlaybackMode)
+            }
+        }
+    }
+
+    fun playNextEpisode() {
+        nextEpisode?.let { 
+            showNextEpisodeDialog = false
+            playEpisode(it, fromStart = true)
+            nextEpisode = null
         }
     }
 

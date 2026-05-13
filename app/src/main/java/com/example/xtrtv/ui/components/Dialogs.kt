@@ -3,6 +3,8 @@ package com.example.xtrtv.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -15,6 +17,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.*
@@ -364,6 +367,94 @@ fun LogoutDialog(
             LaunchedEffect(Unit) {
                 kotlinx.coroutines.delay(100)
                 logoutFocusRequester.requestFocus()
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+fun NextEpisodeDialog(
+    onNext: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.85f)),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            modifier = Modifier
+                .width(400.dp)
+                .background(Color(0xFF121212), RoundedCornerShape(24.dp))
+                .padding(32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Icon(
+                imageVector = androidx.compose.material.icons.Icons.Default.SkipNext,
+                contentDescription = null,
+                tint = Turquoise,
+                modifier = Modifier.size(48.dp)
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+            Text(
+                text = stringResource(R.string.next_episode_title),
+                style = MaterialTheme.typography.headlineSmall,
+                color = Color.White,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = stringResource(R.string.next_episode_desc),
+                style = MaterialTheme.typography.bodyLarge,
+                color = Color.Gray,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(32.dp))
+            
+            val nextFocusRequester = remember { FocusRequester() }
+            
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Surface(
+                    onClick = onNext,
+                    modifier = Modifier.fillMaxWidth().focusRequester(nextFocusRequester),
+                    colors = ClickableSurfaceDefaults.colors(
+                        containerColor = Turquoise,
+                        contentColor = Color.Black,
+                        focusedContainerColor = Color.White
+                    ),
+                    shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(12.dp))
+                ) {
+                    Text(
+                        text = stringResource(R.string.watch_next),
+                        modifier = Modifier.padding(14.dp),
+                        textAlign = TextAlign.Center,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                
+                Surface(
+                    onClick = onDismiss,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ClickableSurfaceDefaults.colors(
+                        containerColor = Color(0xFF2A2A2A),
+                        contentColor = Color.White,
+                        focusedContainerColor = Color.White,
+                        focusedContentColor = Color.Black
+                    ),
+                    shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(12.dp))
+                ) {
+                    Text(
+                        text = stringResource(R.string.close),
+                        modifier = Modifier.padding(14.dp),
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+            
+            LaunchedEffect(Unit) {
+                nextFocusRequester.requestFocus()
             }
         }
     }

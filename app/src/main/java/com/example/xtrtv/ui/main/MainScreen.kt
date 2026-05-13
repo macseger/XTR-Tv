@@ -101,7 +101,7 @@ fun MainScreen(
             showChannelList || showContextMenu || showPlaybackControls || 
             showSeriesDetails || showSearchOverlay || showExitDialog || 
             showLogoutDialog || showUrlDialog || viewModel.showResumeDialog ||
-            showAudioMenu
+            showAudioMenu || viewModel.showNextEpisodeDialog
         }
     }
     
@@ -467,6 +467,9 @@ fun MainScreen(
                             Surface(
                                 onClick = { 
                                     viewModel.changeMode(mode)
+                                    if (mode == MainViewModel.AppMode.LIVE) {
+                                        showChannelList = false
+                                    }
                                     focusPlayingNow = false
                                     focusContentTrigger++
                                 },
@@ -1150,6 +1153,18 @@ fun MainScreen(
                     showLogoutDialog = false
                 },
                 onDismiss = { showLogoutDialog = false }
+            )
+        }
+
+        if (viewModel.showNextEpisodeDialog) {
+            NextEpisodeDialog(
+                onNext = { viewModel.playNextEpisode() },
+                onDismiss = { 
+                    viewModel.showNextEpisodeDialog = false
+                    viewModel.changeMode(MainViewModel.AppMode.SERIES)
+                    showSeriesDetails = true
+                    showChannelList = true
+                }
             )
         }
 

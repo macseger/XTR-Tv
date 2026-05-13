@@ -13,6 +13,9 @@ interface AppDao {
     @Query("SELECT * FROM streams WHERE categoryId = :categoryId ORDER BY num ASC")
     suspend fun getStreamsByCategory(categoryId: String): List<StreamEntity>
 
+    @Query("SELECT * FROM streams WHERE streamId = :streamId LIMIT 1")
+    suspend fun getStreamById(streamId: Int): StreamEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertStreams(streams: List<StreamEntity>)
 
