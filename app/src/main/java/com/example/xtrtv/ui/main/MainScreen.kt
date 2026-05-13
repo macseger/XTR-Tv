@@ -115,13 +115,15 @@ fun MainScreen(
     LaunchedEffect(
         showChannelList, showContextMenu, showSubtitleMenu, showSeriesDetails, 
         showSearchOverlay, showExitDialog, showLogoutDialog, showUrlDialog, 
-        viewModel.showResumeDialog, viewModel.currentMode, viewModel.selectedCategory,
-        viewModel.channels, viewModel.vodMovies, viewModel.seriesList
+        viewModel.showResumeDialog, viewModel.currentMode
     ) {
         if (showSeriesDetails || showSearchOverlay || showExitDialog || showLogoutDialog || showUrlDialog || viewModel.showResumeDialog) {
             return@LaunchedEffect
         }
         
+        // Wait for composition to settle to avoid "FocusRequester is not initialized"
+        kotlinx.coroutines.yield()
+
         if (showContextMenu) {
             contextMenuFocusRequester.requestFocus()
         } else if (showChannelList) {
@@ -131,9 +133,11 @@ fun MainScreen(
                 
                 if (index >= 0) {
                     channelListState.scrollToItem(index)
+                    kotlinx.coroutines.yield() // Ensure scroll is handled
                     channelFocusRequester.requestFocus()
                 } else if (viewModel.channels.isNotEmpty()) {
                     channelListState.scrollToItem(0)
+                    kotlinx.coroutines.yield()
                     channelFocusRequester.requestFocus()
                 } else {
                     railFocusRequester.requestFocus()
@@ -533,7 +537,7 @@ fun MainScreen(
                                     }
                                 }
                             }
-                            TopRightClock(viewModel.currentTime)
+                            TopRightClock()
                         }
 
                         if (viewModel.currentMode == MainViewModel.AppMode.LIVE) {
@@ -636,7 +640,7 @@ fun MainScreen(
                                                             start = epgEntry.start,
                                                             stop = epgEntry.stop,
                                                             isActive = isPlaying,
-                                                            currentTime = viewModel.currentTime
+                                                            timeProvider = { viewModel.currentTime }
                                                         )
                                                     }
                                                 }

@@ -4,8 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -24,7 +23,16 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 @Composable
-fun TopRightClock(currentTime: Long) {
+fun TopRightClock() {
+    var currentTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    
+    LaunchedEffect(Unit) {
+        while (true) {
+            currentTime = System.currentTimeMillis()
+            kotlinx.coroutines.delay(1000)
+        }
+    }
+
     val clockStr = remember(currentTime) {
         SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(currentTime))
     }
@@ -37,7 +45,8 @@ fun TopRightClock(currentTime: Long) {
 }
 
 @Composable
-fun EpgProgressBar(start: Long, stop: Long, isActive: Boolean, currentTime: Long) {
+fun EpgProgressBar(start: Long, stop: Long, isActive: Boolean, timeProvider: () -> Long) {
+    val currentTime = timeProvider()
     val progress = if (stop > start) {
         ((currentTime - start).toFloat() / (stop - start).toFloat()).coerceIn(0f, 1f)
     } else 0f

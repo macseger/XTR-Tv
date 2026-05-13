@@ -97,6 +97,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     var isLoading by mutableStateOf(false)
     var isEpgUpdating by mutableStateOf(false)
     var backgroundStatus by mutableStateOf<String?>(null)
+    private var isMappingEpg = false
     var isTunnelingEnabled by mutableStateOf(false)
     var isFrameRateMatchingEnabled by mutableStateOf(false)
     var subtitleTracks by mutableStateOf<List<TrackInfo>>(emptyList())
@@ -285,32 +286,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
             })
         }
+        
+        // mappings are already loaded at this point
         loadInitialData()
         
-        // Centralized time update loop
+        // Centralized time update loop (still needed for EpgProgressBar mapping)
         viewModelScope.launch {
             while (true) {
                 currentTime = System.currentTimeMillis()
                 kotlinx.coroutines.delay(1000)
-            }
-        }
-        
-        // Smart EPG update
-        viewModelScope.launch {
-            val currentTime = System.currentTimeMillis()
-            val hasData = withContext(Dispatchers.IO) { 
-                dao.getValidEpgCount(currentTime) > 0 
-            }
-            
-            if (hasData) {
-                Log.d(TAG, "Found existing EPG data in DB, skipping auto-download")
-                // Load mappings from DB to enable name matching
-                withContext(Dispatchers.IO) {
-                    val savedMappings = dao.getAllMappings()
-                    updateChannelMappings(savedMappings.associate { it.displayName to it.channelId })
-                    lastEpgUpdate = dao.getLastUpdatedTime()
-                }
-                refreshEpgMap()
             }
         }
     }
@@ -495,7 +479,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val data = userData ?: return
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                isEpgUpdating = true
+                // isEpgUpdating should be managed by the caller
                 val baseUrl = data.url.removeSuffix("/")
                 val epgUrl = "$baseUrl/xmltv.php?username=${data.username}&password=${data.password}"
                 val apiService = ApiClient.createService(data.url)
@@ -544,57 +528,65 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private suspend fun refreshEpgMap() = withContext(Dispatchers.IO) {
-        val currentTime = System.currentTimeMillis()
+    private suspend fun refreshEpgMap() = withContext(Dispatchers.Default) {
+        if (isMappingEpg) return@withContext
+        val currentTimeMs = System.currentTimeMillis()
         val currentChannels = channels
         if (currentChannels.isEmpty()) return@withContext
-
-        // 1. Collect all candidate IDs for all channels to fetch in bulk
-        val allCandidateIds = mutableSetOf<String>()
-        val channelCandidatesMap = mutableMapOf<Int, List<String>>()
-
-        currentChannels.forEach { stream ->
-            val candidates = mutableListOf<String>()
-            // Priority 1: Direct ID from stream
-            if (!stream.epgChannelId.isNullOrBlank() && stream.epgChannelId != "null") {
-                candidates.add(stream.epgChannelId)
-            }
-            // Priority 2: Exact name match
-            channelIdMap[stream.name]?.let { candidates.add(it) }
-            // Priority 3: Normalized name match
-            normalizedChannelIdMap[normalizeName(stream.name)]?.let { candidates.add(it) }
-            
-            val uniqueCandidates = candidates.distinct()
-            channelCandidatesMap[stream.streamId] = uniqueCandidates
-            allCandidateIds.addAll(uniqueCandidates)
-        }
-
-        // 2. Fetch all current programs for these IDs in one batch
-        val programs = if (allCandidateIds.isNotEmpty()) {
-            dao.getCurrentEpgForChannels(allCandidateIds.toList(), currentTime)
-        } else {
-            emptyList()
-        }
         
-        // Group by channelId as there might be multiple (though getCurrentEpgForChannels filters by time)
-        val programLookup = programs.associateBy { it.channelId }
+        isMappingEpg = true
+        try {
+            // 1. Collect all candidate IDs for all channels to fetch in bulk
+            val allCandidateIds = mutableSetOf<String>()
+            val channelCandidatesMap = mutableMapOf<Int, List<String>>()
 
-        // 3. Map programs back to channels based on priority
-        val newEpgMap = mutableMapOf<Int, EpgEntity>()
-        currentChannels.forEach { stream ->
-            val candidates = channelCandidatesMap[stream.streamId] ?: emptyList()
-            for (id in candidates) {
-                val match = programLookup[id]
-                if (match != null) {
-                    newEpgMap[stream.streamId] = match
-                    break
+            currentChannels.forEach { stream ->
+                val candidates = mutableListOf<String>()
+                // Priority 1: Direct ID from stream
+                if (!stream.epgChannelId.isNullOrBlank() && stream.epgChannelId != "null") {
+                    candidates.add(stream.epgChannelId)
+                }
+                // Priority 2: Exact name match
+                channelIdMap[stream.name]?.let { candidates.add(it) }
+                // Priority 3: Normalized name match
+                normalizedChannelIdMap[normalizeName(stream.name)]?.let { candidates.add(it) }
+                
+                val uniqueCandidates = candidates.distinct()
+                channelCandidatesMap[stream.streamId] = uniqueCandidates
+                allCandidateIds.addAll(uniqueCandidates)
+            }
+
+            // 2. Fetch all current programs for these IDs in one batch
+            val programs = if (allCandidateIds.isNotEmpty()) {
+                withContext(Dispatchers.IO) {
+                    dao.getCurrentEpgForChannels(allCandidateIds.toList(), currentTimeMs)
+                }
+            } else {
+                emptyList()
+            }
+            
+            // Group by channelId as there might be multiple (though getCurrentEpgForChannels filters by time)
+            val programLookup = programs.associateBy { it.channelId }
+
+            // 3. Map programs back to channels based on priority
+            val newEpgMap = mutableMapOf<Int, EpgEntity>()
+            currentChannels.forEach { stream ->
+                val candidates = channelCandidatesMap[stream.streamId] ?: emptyList()
+                for (id in candidates) {
+                    val match = programLookup[id]
+                    if (match != null) {
+                        newEpgMap[stream.streamId] = match
+                        break
+                    }
                 }
             }
-        }
-        
-        withContext(Dispatchers.Main) {
-            epgMap = newEpgMap
-            Log.i(TAG, "EPG Map updated: ${newEpgMap.size} matches found out of ${currentChannels.size} channels")
+            
+            withContext(Dispatchers.Main) {
+                epgMap = newEpgMap
+                Log.i(TAG, "EPG Map updated: ${newEpgMap.size} matches found out of ${currentChannels.size} channels")
+            }
+        } finally {
+            isMappingEpg = false
         }
     }
 

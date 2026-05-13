@@ -3,14 +3,14 @@ package com.example.xtrtv.data.db
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "categories")
+@Entity(tableName = "categories", indices = [androidx.room.Index("type")])
 data class CategoryEntity(
     @PrimaryKey val id: String,
     val name: String,
     val type: String = "live" // "live", "vod", "series"
 )
 
-@Entity(tableName = "vod_movies")
+@Entity(tableName = "vod_movies", indices = [androidx.room.Index("categoryId")])
 data class VodEntity(
     @PrimaryKey val streamId: Int,
     val name: String,
@@ -21,7 +21,7 @@ data class VodEntity(
     val added: String? = null
 )
 
-@Entity(tableName = "series")
+@Entity(tableName = "series", indices = [androidx.room.Index("categoryId")])
 data class SeriesEntity(
     @PrimaryKey val seriesId: Int,
     val name: String,
@@ -32,7 +32,7 @@ data class SeriesEntity(
     val lastModified: String? = null
 )
 
-@Entity(tableName = "streams")
+@Entity(tableName = "streams", indices = [androidx.room.Index("categoryId")])
 data class StreamEntity(
     @PrimaryKey val streamId: Int,
     val name: String,
@@ -42,7 +42,10 @@ data class StreamEntity(
     val epgChannelId: String? = null
 )
 
-@Entity(tableName = "epg_data", primaryKeys = ["channelId", "start"])
+@Entity(tableName = "epg_data", 
+    primaryKeys = ["channelId", "start"],
+    indices = [androidx.room.Index("channelId"), androidx.room.Index("stop")]
+)
 data class EpgEntity(
     val channelId: String,
     val title: String,
