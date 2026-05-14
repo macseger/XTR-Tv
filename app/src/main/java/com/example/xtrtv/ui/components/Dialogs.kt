@@ -459,3 +459,110 @@ fun NextEpisodeDialog(
         }
     }
 }
+
+@OptIn(ExperimentalTvMaterial3Api::class, ExperimentalMaterial3Api::class)
+@Composable
+fun CustomEpgDialog(
+    initialUrl: String?,
+    onConfirm: (String?) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var url by remember { mutableStateOf(initialUrl ?: "") }
+    val focusRequester = remember { FocusRequester() }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.85f)),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            modifier = Modifier
+                .width(500.dp)
+                .background(Color(0xFF1A1A1A), RoundedCornerShape(16.dp))
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = stringResource(R.string.custom_epg_title),
+                style = MaterialTheme.typography.headlineSmall,
+                color = Color.White
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = stringResource(R.string.custom_epg_desc),
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color.Gray,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+            
+            OutlinedTextField(
+                value = url,
+                onValueChange = { url = it },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusRequester(focusRequester),
+                label = { Text(stringResource(R.string.epg_url_placeholder)) },
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = Turquoise,
+                    unfocusedBorderColor = Color.DarkGray,
+                    cursorColor = Turquoise,
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White
+                ),
+                singleLine = true,
+                shape = RoundedCornerShape(12.dp)
+            )
+            
+            Spacer(modifier = Modifier.height(32.dp))
+            
+            val saveFocusRequester = remember { FocusRequester() }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Surface(
+                    onClick = { onConfirm(if (url.isBlank()) null else url) },
+                    modifier = Modifier.weight(1f).focusRequester(saveFocusRequester),
+                    colors = ClickableSurfaceDefaults.colors(
+                        containerColor = Turquoise,
+                        contentColor = Color.Black,
+                        focusedContainerColor = Color.White
+                    ),
+                    shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(8.dp))
+                ) {
+                    Text(
+                        text = stringResource(R.string.save),
+                        modifier = Modifier.padding(12.dp),
+                        textAlign = TextAlign.Center
+                    )
+                }
+                
+                Surface(
+                    onClick = onDismiss,
+                    modifier = Modifier.weight(1f),
+                    colors = ClickableSurfaceDefaults.colors(
+                        containerColor = Color(0xFF333333),
+                        contentColor = Color.White,
+                        focusedContainerColor = Color.White,
+                        focusedContentColor = Color.Black
+                    ),
+                    shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(8.dp))
+                ) {
+                    Text(
+                        text = stringResource(R.string.cancel),
+                        modifier = Modifier.padding(12.dp),
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+            
+            LaunchedEffect(Unit) {
+                kotlinx.coroutines.delay(100)
+                focusRequester.requestFocus()
+            }
+        }
+    }
+}

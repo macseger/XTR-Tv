@@ -31,6 +31,14 @@ class Prefs(context: Context) {
         get() = prefs.getLong("last_full_sync", 0L)
         set(value) = prefs.edit().putLong("last_full_sync", value).apply()
 
+    var customEpgUrl: String?
+        get() = prefs.getString("custom_epg_url", null)
+        set(value) = prefs.edit().putString("custom_epg_url", value).apply()
+
+    var useInternalSwedishEpg: Boolean
+        get() = prefs.getBoolean("use_internal_swedish_epg", false)
+        set(value) = prefs.edit().putBoolean("use_internal_swedish_epg", value).apply()
+
     fun getUser(): UserData? {
         val url = prefs.getString("url", null) ?: return null
         val username = prefs.getString("username", null) ?: return null

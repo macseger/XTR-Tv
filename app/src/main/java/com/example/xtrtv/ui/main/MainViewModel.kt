@@ -108,6 +108,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         
     var isTunnelingEnabled by mutableStateOf(false)
     var isFrameRateMatchingEnabled by mutableStateOf(false)
+    var customEpgUrl by mutableStateOf<String?>(null)
+    var useInternalSwedishEpg by mutableStateOf(false)
     var subtitleTracks by mutableStateOf<List<TrackInfo>>(emptyList())
     var selectedSubtitleId by mutableStateOf<String?>(null)
     var audioTracks by mutableStateOf<List<TrackInfo>>(emptyList())
@@ -285,6 +287,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         
         isTunnelingEnabled = prefs.isTunnelingEnabled
         isFrameRateMatchingEnabled = prefs.isFrameRateMatchingEnabled
+        customEpgUrl = prefs.customEpgUrl
+        useInternalSwedishEpg = prefs.useInternalSwedishEpg
         
         val renderersFactory = DefaultRenderersFactory(context).apply {
             setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
@@ -508,9 +512,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val data = userData ?: return
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                // isEpgUpdating should be managed by the caller
-                val baseUrl = data.url.removeSuffix("/")
-                val epgUrl = "$baseUrl/xmltv.php?username=${data.username}&password=${data.password}"
+                // Determine EPG URL
+                val epgUrl = when {
+                    useInternalSwedishEpg -> "https://iptv-epg.org/files/epg-se.xml"
+                    !customEpgUrl.isNullOrBlank() -> customEpgUrl!!
+                    else -> {
+                        val baseUrl = data.url.removeSuffix("/")
+                        "$baseUrl/xmltv.php?username=${data.username}&password=${data.password}"
+                    }
+                }
+                
+                Log.d(TAG, "Fetching EPG from: $epgUrl")
                 val apiService = ApiClient.createService(data.url)
                 val response = apiService.getXmlEpg(epgUrl)
                 
@@ -1355,6 +1367,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         
         // Restart current channel to apply
         currentChannel?.let { playChannel(it) }
+    }
+
+    fun updateCustomEpgUrl(url: String?) {
+        customEpgUrl = url
+        prefs.customEpgUrl = url
+    }
+
+    fun toggleInternalSwedishEpg() {
+        useInternalSwedishEpg = !useInternalSwedishEpg
+        prefs.useInternalSwedishEpg = useInternalSwedishEpg
+        if (useInternalSwedishEpg) {
+            customEpgUrl = null
+            prefs.customEpgUrl = null
+        }
     }
 
     fun logout(onComplete: () -> Unit) {

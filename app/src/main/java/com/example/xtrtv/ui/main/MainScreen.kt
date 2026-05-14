@@ -92,6 +92,7 @@ fun MainScreen(
     var showExitDialog by remember { mutableStateOf(false) }
     var showLogoutDialog by remember { mutableStateOf(false) }
     var showUrlDialog by remember { mutableStateOf(false) }
+    var showCustomEpgDialog by remember { mutableStateOf(false) }
     var lastInteractionTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var focusContentTrigger by remember { mutableIntStateOf(0) }
     var focusCategoryTrigger by remember { mutableIntStateOf(0) }
@@ -1091,6 +1092,28 @@ fun MainScreen(
                             }
                             item {
                                 ContextMenuItem(
+                                    text = stringResource(R.string.add_custom_epg),
+                                    icon = { Icon(Icons.Default.AddLink, null, modifier = Modifier.size(20.dp)) },
+                                    onClick = {
+                                        showCustomEpgDialog = true
+                                        showContextMenu = false
+                                    }
+                                )
+                            }
+                            item {
+                                ContextMenuItem(
+                                    text = stringResource(R.string.use_swedish_epg),
+                                    icon = { Icon(Icons.Default.LocationOn, null, modifier = Modifier.size(20.dp)) },
+                                    isSelected = viewModel.useInternalSwedishEpg,
+                                    onClick = {
+                                        viewModel.toggleInternalSwedishEpg()
+                                        viewModel.refreshEpg()
+                                        showContextMenu = false
+                                    }
+                                )
+                            }
+                            item {
+                                ContextMenuItem(
                                     text = stringResource(R.string.refresh_vod_series),
                                     icon = { Icon(Icons.Default.MovieFilter, null, modifier = Modifier.size(20.dp)) },
                                     onClick = {
@@ -1284,6 +1307,18 @@ fun MainScreen(
                     showUrlDialog = false
                 },
                 onDismiss = { showUrlDialog = false }
+            )
+        }
+
+        if (showCustomEpgDialog) {
+            CustomEpgDialog(
+                initialUrl = viewModel.customEpgUrl,
+                onConfirm = { newUrl ->
+                    viewModel.updateCustomEpgUrl(newUrl)
+                    showCustomEpgDialog = false
+                    viewModel.refreshEpg() // Trigger refresh with new URL
+                },
+                onDismiss = { showCustomEpgDialog = false }
             )
         }
     }

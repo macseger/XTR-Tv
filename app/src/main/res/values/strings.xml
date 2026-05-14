@@ -61,4 +61,9 @@
     <string name="next_episode_desc">Vill du se nästa avsnitt?</string>
     <string name="watch_next">Se nästa</string>
     <string name="close">Stäng</string>
+    <string name="add_custom_epg">Lägg till egen EPG-källa</string>
+    <string name="use_swedish_epg">Använd inbyggd Svensk EPG</string>
+    <string name="custom_epg_title">Egen EPG-källa</string>
+    <string name="custom_epg_desc">Ange URL till din XMLTV-fil. Lämna tomt för att använda serverns EPG.</string>
+    <string name="epg_url_placeholder">https://example.com/epg.xml</string>
 </resources>
