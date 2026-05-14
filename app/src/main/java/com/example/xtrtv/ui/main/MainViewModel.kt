@@ -75,7 +75,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private fun normalizeName(name: String): String {
+    fun normalizeName(name: String): String {
         return name.lowercase()
             .replace(PREFIX_REGEX, "") // Ta bort vanliga prefix
             .replace(SUFFIX_REGEX, "") // Ta bort vanliga suffix

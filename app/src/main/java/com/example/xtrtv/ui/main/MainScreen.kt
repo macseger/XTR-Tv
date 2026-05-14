@@ -818,9 +818,21 @@ fun MainScreen(
                                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp).fillMaxWidth(),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
+                                            val context = LocalContext.current
+                                            val normalizedName = remember(stream.name) { viewModel.normalizeName(stream.name) }
+                                            val localIconResId = remember(normalizedName) {
+                                                context.resources.getIdentifier(normalizedName, "drawable", context.packageName)
+                                            }
+                                            
                                             AsyncImage(
                                                 model = ImageRequest.Builder(LocalContext.current)
                                                     .data(stream.streamIcon)
+                                                    .apply {
+                                                        if (localIconResId != 0) {
+                                                            error(localIconResId)
+                                                            fallback(localIconResId)
+                                                        }
+                                                    }
                                                     .crossfade(true)
                                                     .build(),
                                                 contentDescription = null,
