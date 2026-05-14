@@ -254,24 +254,30 @@ fun MainScreen(
     }
 
     BackHandler(enabled = true) {
+        // REGEL 1: Om någon meny/overlay är öppen -> Stäng ALLT direkt
+        if (showChannelList || showContextMenu || showSeriesDetails || showSearchOverlay || showPlaybackControls) {
+            showChannelList = false
+            showContextMenu = false
+            showSubtitleMenu = false
+            showAudioMenu = false
+            showSeriesDetails = false
+            showSearchOverlay = false
+            showPlaybackControls = false
+            return@BackHandler
+        }
+
+        // REGEL 2: Dialoger och specialfall
         when {
             showUrlDialog -> showUrlDialog = false
             showLogoutDialog -> showLogoutDialog = false
             showExitDialog -> showExitDialog = false
             viewModel.showResumeDialog -> viewModel.showResumeDialog = false
-            showSearchOverlay -> showSearchOverlay = false
-            showSeriesDetails -> showSeriesDetails = false
-            showContextMenu -> {
-                showSubtitleMenu = false
-                showAudioMenu = false
-                showContextMenu = false
-            }
-            showPlaybackControls -> showPlaybackControls = false
-            showChannelList -> showChannelList = false
+            // REGEL 3: Om ingen meny är öppen -> Hantera Back beroende på läge
             else -> {
                 if (viewModel.activePlaybackMode == MainViewModel.AppMode.LIVE) {
                     showExitDialog = true
                 } else {
+                    // I VOD/Serie: Back öppnar menyn
                     viewModel.changeMode(viewModel.activePlaybackMode)
                     showChannelList = true
                 }
@@ -286,18 +292,28 @@ fun MainScreen(
             .focusRequester(rootFocusRequester)
             .focusable()
             .onKeyEvent { event ->
-                // Global interaction tracking
                 if (event.type == KeyEventType.KeyUp) {
                     lastInteractionTime = System.currentTimeMillis()
                 }
 
                 if (!isAnyOverlayVisible) {
-                    if (event.type == KeyEventType.KeyDown && 
-                        (event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_CENTER || 
-                         event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_ENTER)) {
-                        if (event.nativeKeyEvent.isLongPress) {
-                            showContextMenu = true
-                            return@onKeyEvent true
+                    if (event.type == KeyEventType.KeyDown) {
+                        when (event.nativeKeyEvent.keyCode) {
+                            android.view.KeyEvent.KEYCODE_BACK -> {
+                                if (viewModel.activePlaybackMode != MainViewModel.AppMode.LIVE) {
+                                    viewModel.changeMode(viewModel.activePlaybackMode)
+                                    showChannelList = true
+                                    return@onKeyEvent true
+                                }
+                            }
+                            android.view.KeyEvent.KEYCODE_DPAD_CENTER,
+                            android.view.KeyEvent.KEYCODE_ENTER,
+                            android.view.KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                                if (event.nativeKeyEvent.isLongPress) {
+                                    showContextMenu = true
+                                    return@onKeyEvent true
+                                }
+                            }
                         }
                     }
 
@@ -310,7 +326,6 @@ fun MainScreen(
                                     viewModel.changeMode(MainViewModel.AppMode.LIVE)
                                     showChannelList = true
                                 } else {
-                                    // Toggle play/pause and show overlay
                                     viewModel.togglePlayPause()
                                     showPlaybackControls = true
                                 }
@@ -344,7 +359,6 @@ fun MainScreen(
                         }
                     } else false
                 } else if (showPlaybackControls && event.type == KeyEventType.KeyUp) {
-                    lastInteractionTime = System.currentTimeMillis()
                     when (event.nativeKeyEvent.keyCode) {
                         android.view.KeyEvent.KEYCODE_DPAD_UP -> {
                             showPlaybackControls = false
@@ -966,14 +980,6 @@ fun MainScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(Color.Black.copy(alpha = 0.8f))
-                    .onKeyEvent {
-                        if (it.key == Key.Back && it.type == KeyEventType.KeyUp) {
-                            showSubtitleMenu = false
-                            showAudioMenu = false
-                            showContextMenu = false
-                            true
-                        } else false
-                    }
                     .clickable { 
                         showContextMenu = false
                         showSubtitleMenu = false
