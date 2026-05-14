@@ -40,6 +40,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val TAG = "MainViewModel"
     
     private val PREFIX_REGEX = Regex("^(se|se:|sweden|sweden:)\\s*")
+    private val BRACKET_REGEX = Regex("[\\[(].*?[\\])]")
     private val SUFFIX_REGEX = Regex("\\s+(fhd|hd|sd|hevc|4k|se|s)$")
     private val CLEAN_REGEX = Regex("[^a-z0-9]")
     private val CAT_PREFIX_REGEX = Regex("^(Movies|Series|Filmer|Serier)\\s*[:\\-]\\s*", RegexOption.IGNORE_CASE)
@@ -77,6 +78,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun normalizeName(name: String): String {
         return name.lowercase()
+            .replace(BRACKET_REGEX, "") // Ta bort allt inom [] och () (t.ex. [Multi-Sub])
             .replace(PREFIX_REGEX, "") // Ta bort vanliga prefix
             .replace(SUFFIX_REGEX, "") // Ta bort vanliga suffix
             .replace(CLEAN_REGEX, "") // Behåll bara bokstäver och siffror
