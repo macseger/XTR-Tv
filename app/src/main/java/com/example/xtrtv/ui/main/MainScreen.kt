@@ -64,7 +64,8 @@ import androidx.tv.material3.*
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.xtrtv.R
-import com.example.xtrtv.data.UserData
+import com.example.xtrtv.data.*
+import com.example.xtrtv.api.*
 import com.example.xtrtv.ui.components.*
 import com.example.xtrtv.utils.UpdateManager
 import com.example.xtrtv.ui.theme.Turquoise
@@ -96,7 +97,9 @@ fun MainScreen(
     var focusCategoryTrigger by remember { mutableIntStateOf(0) }
     var focusPlayingNow by remember { mutableStateOf(true) }
     
-    // Derived state for better performance - avoids full recomposition on every sub-state change
+    var focusedChannel by remember { mutableStateOf<LiveStream?>(null) }
+    var focusedMovie by remember { mutableStateOf<VodMovie?>(null) }
+    var focusedSeries by remember { mutableStateOf<Series?>(null) }
     val isAnyOverlayVisible by remember {
         derivedStateOf {
             showChannelList || showContextMenu || showPlaybackControls || 
@@ -142,20 +145,26 @@ fun MainScreen(
     }
 
     LaunchedEffect(showChannelList) {
-        if (showChannelList && !showContextMenu && !showSeriesDetails && !showSearchOverlay) {
-            focusPlayingNow = true
-            kotlinx.coroutines.yield()
+        if (showChannelList) {
+            if (viewModel.currentMode == MainViewModel.AppMode.LIVE) {
+                focusedChannel = viewModel.currentChannel
+            }
             
-            if (viewModel.currentMode == MainViewModel.AppMode.LIVE && playingIndex >= 0) {
-                try {
-                    channelListState.scrollToItem(playingIndex)
-                    contentFocusRequester.requestFocus()
-                } catch (e: Exception) {
+            if (!showContextMenu && !showSeriesDetails && !showSearchOverlay) {
+                focusPlayingNow = true
+                kotlinx.coroutines.yield()
+                
+                if (viewModel.currentMode == MainViewModel.AppMode.LIVE && playingIndex >= 0) {
+                    try {
+                        channelListState.scrollToItem(playingIndex)
+                        contentFocusRequester.requestFocus()
+                    } catch (e: Exception) {
+                        railFocusRequester.requestFocus()
+                    }
+                } else {
+                    // Always start focus on the rail for better TV UX predictability
                     railFocusRequester.requestFocus()
                 }
-            } else {
-                // Always start focus on the rail for better TV UX predictability
-                railFocusRequester.requestFocus()
             }
         }
     }
@@ -448,32 +457,36 @@ fun MainScreen(
         // 4. Content Navigation Overlay
         AnimatedVisibility(
             visible = showChannelList,
-            enter = fadeIn(animationSpec = tween(300)) + expandHorizontally(animationSpec = tween(300)),
-            exit = fadeOut(animationSpec = tween(300)) + shrinkHorizontally(animationSpec = tween(300))
+            enter = fadeIn(animationSpec = tween(400)) + slideInHorizontally(animationSpec = tween(400, easing = androidx.compose.animation.core.FastOutSlowInEasing)),
+            exit = fadeOut(animationSpec = tween(300)) + slideOutHorizontally(animationSpec = tween(300, easing = androidx.compose.animation.core.FastOutSlowInEasing))
         ) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.4f))
+                    .background(
+                        androidx.compose.ui.graphics.Brush.horizontalGradient(
+                            colors = listOf(
+                                Color(0xFF050505),
+                                Color(0xFF0A0A0A).copy(alpha = 0.95f),
+                                Color.Transparent
+                            ),
+                            startX = 0f,
+                            endX = 1800f
+                        )
+                    )
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color(0xFF0A0A0A).copy(alpha = 0.85f))
-                ) {
-                    // Left Navigation Rail
+                Row(modifier = Modifier.fillMaxSize()) {
+                    // 1. Navigation Rail (Sleek & Minimal)
                     Column(
                         modifier = Modifier
-                            .width(100.dp)
+                            .width(80.dp)
                             .fillMaxHeight()
-                            .background(Color.Black.copy(alpha = 0.3f))
+                            .background(Color.Black.copy(alpha = 0.4f))
                             .focusProperties {
-                                exit = { focusDirection ->
-                                    if (focusDirection == FocusDirection.Right) categoryFocusRequester else FocusRequester.Default
-                                }
+                                exit = { dir -> if (dir == FocusDirection.Right) categoryFocusRequester else FocusRequester.Default }
                             },
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
+                        verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically)
                     ) {
                         val modes = listOf(
                             Triple(MainViewModel.AppMode.LIVE, Icons.Default.Tv, stringResource(R.string.live)),
@@ -481,7 +494,7 @@ fun MainScreen(
                             Triple(MainViewModel.AppMode.SERIES, Icons.Default.VideoLibrary, stringResource(R.string.series))
                         )
 
-                        modes.forEachIndexed { index, (mode, icon, label) ->
+                        modes.forEach { (mode, icon, label) ->
                             val isSelected = viewModel.currentMode == mode
                             Surface(
                                 onClick = { 
@@ -495,121 +508,100 @@ fun MainScreen(
                                     focusContentTrigger++
                                 },
                                 modifier = Modifier
-                                    .size(64.dp)
-                                    .padding(vertical = 4.dp)
+                                    .size(56.dp)
                                     .then(if (isSelected) Modifier.focusRequester(railFocusRequester) else Modifier),
                                 colors = ClickableSurfaceDefaults.colors(
-                                    containerColor = if (isSelected) Turquoise.copy(alpha = 0.2f) else Color.Transparent,
+                                    containerColor = if (isSelected) Turquoise.copy(alpha = 0.15f) else Color.Transparent,
                                     focusedContainerColor = Turquoise,
-                                    contentColor = if (isSelected) Turquoise else Color.White,
+                                    contentColor = if (isSelected) Turquoise else Color.White.copy(alpha = 0.6f),
                                     focusedContentColor = Color.Black
                                 ),
-                                shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(12.dp))
+                                shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(16.dp)),
+                                scale = ClickableSurfaceDefaults.scale(focusedScale = 1.1f)
                             ) {
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.Center,
-                                    modifier = Modifier.fillMaxSize()
-                                ) {
-                                    Icon(icon, contentDescription = label, modifier = Modifier.size(24.dp))
-                                    Text(label, style = MaterialTheme.typography.labelSmall)
+                                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                    Icon(icon, contentDescription = label, modifier = Modifier.size(28.dp))
                                 }
                             }
                         }
 
+                        Box(modifier = Modifier.height(1.dp).width(30.dp).background(Color.White.copy(alpha = 0.1f)))
+
                         // Search
-                        Spacer(modifier = Modifier.height(16.dp))
                         Surface(
                             onClick = { 
                                 viewModel.performSearch("")
                                 showSearchOverlay = true 
                             },
-                            modifier = Modifier
-                                .size(64.dp)
-                                .padding(vertical = 4.dp),
+                            modifier = Modifier.size(56.dp),
                             colors = ClickableSurfaceDefaults.colors(
                                 containerColor = Color.Transparent,
-                                focusedContainerColor = Turquoise,
-                                contentColor = Color.White,
+                                focusedContainerColor = Color.White,
+                                contentColor = Color.White.copy(alpha = 0.6f),
                                 focusedContentColor = Color.Black
                             ),
-                            shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(12.dp))
+                            shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(16.dp)),
+                            scale = ClickableSurfaceDefaults.scale(focusedScale = 1.1f)
                         ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.Center,
-                                modifier = Modifier.fillMaxSize()
-                            ) {
-                                Icon(Icons.Default.Search, contentDescription = stringResource(R.string.search), modifier = Modifier.size(24.dp))
-                                Text(stringResource(R.string.search), style = MaterialTheme.typography.labelSmall)
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                Icon(Icons.Default.Search, contentDescription = stringResource(R.string.search), modifier = Modifier.size(28.dp))
                             }
                         }
 
                         // Settings
-                        Spacer(modifier = Modifier.height(8.dp))
                         Surface(
                             onClick = { 
                                 showSubtitleMenu = false
                                 showContextMenu = true 
                             },
-                            modifier = Modifier
-                                .size(64.dp)
-                                .padding(vertical = 4.dp),
+                            modifier = Modifier.size(56.dp),
                             colors = ClickableSurfaceDefaults.colors(
                                 containerColor = Color.Transparent,
-                                focusedContainerColor = Turquoise,
-                                contentColor = Color.White,
+                                focusedContainerColor = Color.White,
+                                contentColor = Color.White.copy(alpha = 0.6f),
                                 focusedContentColor = Color.Black
                             ),
-                            shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(12.dp))
+                            shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(16.dp)),
+                            scale = ClickableSurfaceDefaults.scale(focusedScale = 1.1f)
                         ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.Center,
-                                modifier = Modifier.fillMaxSize()
-                            ) {
-                                Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.settings), modifier = Modifier.size(24.dp))
-                                Text(stringResource(R.string.settings_short), style = MaterialTheme.typography.labelSmall)
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.settings), modifier = Modifier.size(28.dp))
                             }
                         }
                     }
 
-                    // Categories
+                    // 2. Categories (Elegant Sidebar)
                     Column(
                         modifier = Modifier
-                            .weight(0.9f)
+                            .width(260.dp)
                             .fillMaxHeight()
                             .background(Color.Black.copy(alpha = 0.2f))
                     ) {
                         Text(
-                            text = stringResource(R.string.categories),
-                            modifier = Modifier.padding(start = 24.dp, top = 24.dp, bottom = 16.dp),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = Color.Gray,
-                            letterSpacing = 2.sp
+                            text = stringResource(R.string.categories).uppercase(),
+                            modifier = Modifier.padding(start = 24.dp, top = 32.dp, bottom = 16.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Turquoise,
+                            letterSpacing = 2.sp,
+                            fontWeight = FontWeight.Bold
                         )
-                        val hasContent = when (viewModel.currentMode) {
-                            MainViewModel.AppMode.LIVE -> viewModel.channels.isNotEmpty()
-                            MainViewModel.AppMode.VOD -> viewModel.vodMovies.isNotEmpty()
-                            MainViewModel.AppMode.SERIES -> viewModel.seriesList.isNotEmpty()
-                        }
                         
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),
-                            state = categoryListState
+                            state = categoryListState,
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 8.dp)
                         ) {
                             items(viewModel.categories, key = { it.id }) { category ->
                                 val isSelected = viewModel.selectedCategory?.id == category.id
                                 Surface(
                                     onClick = { 
-                                        // Still keep click for manual trigger if needed
                                         viewModel.selectCategory(category)
                                         focusPlayingNow = false
                                         focusContentTrigger++
                                     },
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(horizontal = 8.dp, vertical = 2.dp)
+                                        .padding(horizontal = 12.dp, vertical = 2.dp)
                                         .onFocusChanged { 
                                             if (it.isFocused && !isSelected) {
                                                 viewModel.selectCategory(category)
@@ -617,81 +609,153 @@ fun MainScreen(
                                         }
                                         .focusProperties {
                                             exit = { dir ->
-                                                if (dir == FocusDirection.Right) {
-                                                    contentFocusRequester
-                                                } else if (dir == FocusDirection.Left) {
-                                                    railFocusRequester
-                                                } else {
-                                                    FocusRequester.Default
-                                                }
+                                                if (dir == FocusDirection.Right) contentFocusRequester
+                                                else if (dir == FocusDirection.Left) railFocusRequester
+                                                else FocusRequester.Default
                                             }
                                         }
                                         .then(if (isSelected) Modifier.focusRequester(categoryFocusRequester) else Modifier),
                                     colors = ClickableSurfaceDefaults.colors(
-                                        containerColor = if (isSelected) Color(0xFF2A2A2A) else Color.Transparent,
-                                        focusedContainerColor = Turquoise,
-                                        contentColor = if (isSelected) Turquoise else Color.White,
+                                        containerColor = if (isSelected) Color.White.copy(alpha = 0.05f) else Color.Transparent,
+                                        focusedContainerColor = Color.White,
+                                        contentColor = if (isSelected) Turquoise else Color.White.copy(alpha = 0.7f),
                                         focusedContentColor = Color.Black
                                     ),
-                                    shape = ClickableSurfaceDefaults.shape(MaterialTheme.shapes.small)
+                                    shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(12.dp)),
+                                    scale = ClickableSurfaceDefaults.scale(focusedScale = 1.05f)
                                 ) {
-                                    Text(
-                                        text = category.name,
-                                        modifier = Modifier.padding(12.dp),
-                                        style = MaterialTheme.typography.bodyLarge
-                                    )
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = category.name,
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
 
-                    Box(modifier = Modifier.width(1.dp).fillMaxHeight().background(Color.DarkGray))
-
+                    // 3. Content Area with Dynamic Info Header
                     Column(
                         modifier = Modifier
-                            .weight(3f)
+                            .weight(1f)
+                            .fillMaxHeight()
                             .focusProperties {
-                                exit = { focusDirection ->
-                                    if (focusDirection == FocusDirection.Left) categoryFocusRequester else FocusRequester.Default
-                                }
+                                exit = { dir -> if (dir == FocusDirection.Left) categoryFocusRequester else FocusRequester.Default }
                             }
                     ) {
-                        Row(
+                        // Header / Info Panel
+                        Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 32.dp, vertical = 24.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.Bottom
+                                .height(240.dp)
+                                .padding(horizontal = 32.dp, vertical = 24.dp)
                         ) {
-                            Column {
+                            Column(modifier = Modifier.align(Alignment.BottomStart)) {
+                                val itemTitle = when (viewModel.currentMode) {
+                                    MainViewModel.AppMode.LIVE -> focusedChannel?.name
+                                    MainViewModel.AppMode.VOD -> focusedMovie?.name
+                                    MainViewModel.AppMode.SERIES -> focusedSeries?.name
+                                } ?: viewModel.selectedCategory?.name ?: ""
+
                                 Text(
-                                    text = viewModel.selectedCategory?.name ?: stringResource(R.string.content),
-                                    style = MaterialTheme.typography.headlineMedium,
-                                    color = Color.White
+                                    text = itemTitle,
+                                    style = MaterialTheme.typography.displaySmall,
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Black,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
-                                if (viewModel.currentMode == MainViewModel.AppMode.LIVE) {
-                                    viewModel.lastEpgUpdate?.let { lastUpdate ->
-                                        val timeStr = remember(lastUpdate) {
-                                            SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(lastUpdate))
+
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                if (viewModel.currentMode == MainViewModel.AppMode.LIVE && focusedChannel != null) {
+                                    val epg = viewModel.epgMap[focusedChannel?.streamId]
+                                    if (epg != null) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(
+                                                text = epg.title,
+                                                style = MaterialTheme.typography.headlineSmall,
+                                                color = Turquoise,
+                                                maxLines = 1
+                                            )
+                                            Spacer(modifier = Modifier.width(16.dp))
+                                            val timeFormat = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
+                                            Text(
+                                                text = "${timeFormat.format(Date(epg.start))} - ${timeFormat.format(Date(epg.stop))}",
+                                                style = MaterialTheme.typography.labelLarge,
+                                                color = Color.Gray
+                                            )
                                         }
                                         Text(
-                                            text = stringResource(R.string.updated_at, timeStr),
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = Color.Gray
+                                            text = epg.description ?: "",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = Color.White.copy(alpha = 0.6f),
+                                            maxLines = 3,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.fillMaxWidth(0.8f)
+                                        )
+                                    }
+                                } else if (viewModel.currentMode == MainViewModel.AppMode.VOD && focusedMovie != null) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        if (!focusedMovie?.rating.isNullOrBlank() && focusedMovie?.rating != "0") {
+                                            Icon(Icons.Default.Star, null, tint = Color(0xFFFFD700), modifier = Modifier.size(20.dp))
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text(focusedMovie?.rating ?: "", color = Color(0xFFFFD700), style = MaterialTheme.typography.titleMedium)
+                                            Spacer(modifier = Modifier.width(16.dp))
+                                        }
+                                        Text(stringResource(R.string.movies), color = Color.Gray, style = MaterialTheme.typography.labelLarge)
+                                        focusedMovie?.containerExtension?.let {
+                                            Spacer(modifier = Modifier.width(16.dp))
+                                            Text(it.uppercase(), modifier = Modifier.background(Color.DarkGray, RoundedCornerShape(4.dp)).padding(horizontal = 6.dp, vertical = 2.dp), style = MaterialTheme.typography.labelSmall, color = Color.White)
+                                        }
+                                    }
+                                } else if (viewModel.currentMode == MainViewModel.AppMode.SERIES && focusedSeries != null) {
+                                    Column {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            if (!focusedSeries?.rating.isNullOrBlank() && focusedSeries?.rating != "0") {
+                                                Icon(Icons.Default.Star, null, tint = Color(0xFFFFD700), modifier = Modifier.size(20.dp))
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Text(focusedSeries?.rating ?: "", color = Color(0xFFFFD700), style = MaterialTheme.typography.titleMedium)
+                                                Spacer(modifier = Modifier.width(16.dp))
+                                            }
+                                            Text(focusedSeries?.genre ?: stringResource(R.string.series), color = Color.Gray, style = MaterialTheme.typography.labelLarge)
+                                            focusedSeries?.releaseDate?.let {
+                                                Spacer(modifier = Modifier.width(16.dp))
+                                                Text(it, color = Color.Gray, style = MaterialTheme.typography.labelLarge)
+                                            }
+                                        }
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Text(
+                                            text = focusedSeries?.plot ?: "",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = Color.White.copy(alpha = 0.6f),
+                                            maxLines = 3,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.fillMaxWidth(0.8f)
                                         )
                                     }
                                 }
                             }
-                            TopRightClock()
+                            
+                            Box(modifier = Modifier.align(Alignment.TopEnd)) {
+                                TopRightClock()
+                            }
                         }
 
+                        // Content List/Grid
                         if (viewModel.currentMode == MainViewModel.AppMode.LIVE) {
                             val timeFormat = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
                             LazyColumn(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(horizontal = 12.dp),
-                                state = channelListState
+                                modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+                                state = channelListState,
+                                contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 40.dp)
                             ) {
                                 itemsIndexed(
                                     items = viewModel.channels,
@@ -710,6 +774,7 @@ fun MainScreen(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .padding(vertical = 4.dp)
+                                            .onFocusChanged { if (it.isFocused) focusedChannel = stream }
                                             .then(
                                                 if (focusPlayingNow && playingIndex >= 0) {
                                                     if (index == playingIndex) Modifier.focusRequester(contentFocusRequester) else Modifier
@@ -718,21 +783,18 @@ fun MainScreen(
                                                 }
                                             ),
                                         colors = ClickableSurfaceDefaults.colors(
-                                            containerColor = if (isPlaying) Color(0xFF1E1E1E) else Color.Transparent,
-                                            focusedContainerColor = Color(0xFF2A2A2A),
+                                            containerColor = if (isPlaying) Turquoise.copy(alpha = 0.05f) else Color.Transparent,
+                                            focusedContainerColor = Color.White,
                                             contentColor = if (isPlaying) Turquoise else Color.White,
-                                            focusedContentColor = Turquoise
+                                            focusedContentColor = Color.Black
                                         ),
                                         shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(12.dp)),
                                         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.02f)
                                     ) {
                                         Row(
-                                            modifier = Modifier
-                                                .padding(horizontal = 16.dp, vertical = 8.dp)
-                                                .fillMaxWidth(),
+                                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp).fillMaxWidth(),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            // Picon
                                             AsyncImage(
                                                 model = ImageRequest.Builder(LocalContext.current)
                                                     .data(stream.streamIcon)
@@ -740,57 +802,51 @@ fun MainScreen(
                                                     .build(),
                                                 contentDescription = null,
                                                 modifier = Modifier
-                                                    .size(40.dp)
-                                                    .padding(end = 12.dp)
-                                                    .background(Color.Black.copy(alpha = 0.2f), RoundedCornerShape(4.dp)),
+                                                    .size(50.dp)
+                                                    .padding(end = 16.dp)
+                                                    .background(Color.Black.copy(alpha = 0.2f), RoundedCornerShape(8.dp)),
                                                 contentScale = androidx.compose.ui.layout.ContentScale.Fit
                                             )
 
-                                            Column(modifier = Modifier.weight(1.2f)) {
+                                            Column(modifier = Modifier.weight(1.5f)) {
                                                 Text(
                                                     text = stream.name,
                                                     style = MaterialTheme.typography.titleMedium,
                                                     maxLines = 1,
                                                     overflow = TextOverflow.Ellipsis,
-                                                    fontWeight = if (isPlaying) FontWeight.Bold else FontWeight.Normal
+                                                    fontWeight = FontWeight.Bold
                                                 )
+                                                if (epgEntry != null) {
+                                                    Text(
+                                                        text = epgEntry.title,
+                                                        style = MaterialTheme.typography.bodyMedium,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis,
+                                                        color = if (isPlaying) Turquoise else LocalContentColor.current.copy(alpha = 0.7f)
+                                                    )
+                                                }
                                             }
 
                                             if (epgEntry != null) {
                                                 Column(
-                                                    modifier = Modifier.weight(2f),
+                                                    modifier = Modifier.weight(1f),
                                                     horizontalAlignment = Alignment.End
                                                 ) {
-                                                    Text(
-                                                        text = epgEntry.title,
-                                                        style = MaterialTheme.typography.bodyLarge,
-                                                        maxLines = 1,
-                                                        overflow = TextOverflow.Ellipsis
-                                                    )
-                                                    
                                                     val timeRange = remember(epgEntry) {
                                                         "${timeFormat.format(Date(epgEntry.start))} - ${timeFormat.format(Date(epgEntry.stop))}"
                                                     }
-                                                    
-                                                    Row(
-                                                        verticalAlignment = Alignment.CenterVertically,
-                                                        horizontalArrangement = Arrangement.End
-                                                    ) {
-                                                        Text(
-                                                            text = timeRange,
-                                                            style = MaterialTheme.typography.labelMedium,
-                                                            color = LocalContentColor.current.copy(alpha = 0.6f)
-                                                        )
-                                                        
-                                                        Spacer(modifier = Modifier.width(12.dp))
-                                                        
-                                                        EpgProgressBar(
-                                                            start = epgEntry.start,
-                                                            stop = epgEntry.stop,
-                                                            isActive = isPlaying,
-                                                            timeProvider = { viewModel.currentTime }
-                                                        )
-                                                    }
+                                                    Text(
+                                                        text = timeRange,
+                                                        style = MaterialTheme.typography.labelMedium,
+                                                        color = LocalContentColor.current.copy(alpha = 0.5f)
+                                                    )
+                                                    Spacer(modifier = Modifier.height(4.dp))
+                                                    EpgProgressBar(
+                                                        start = epgEntry.start,
+                                                        stop = epgEntry.stop,
+                                                        isActive = isPlaying,
+                                                        timeProvider = { viewModel.currentTime }
+                                                    )
                                                 }
                                             }
                                         }
@@ -810,13 +866,11 @@ fun MainScreen(
 
                                 LazyVerticalGrid(
                                     columns = GridCells.Fixed(5),
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(horizontal = 12.dp),
+                                    modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp),
                                     state = vodGridState,
                                     contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 100.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(20.dp),
+                                    verticalArrangement = Arrangement.spacedBy(20.dp)
                                 ) {
                                     if (viewModel.currentMode == MainViewModel.AppMode.VOD) {
                                         itemsIndexed(
@@ -828,7 +882,9 @@ fun MainScreen(
                                                 title = movie.name,
                                                 posterUrl = movie.streamIcon,
                                                 rating = movie.rating,
-                                                modifier = if (index == 0) Modifier.focusRequester(contentFocusRequester) else Modifier,
+                                                modifier = Modifier
+                                                    .onFocusChanged { if (it.isFocused) focusedMovie = movie }
+                                                    .then(if (index == 0) Modifier.focusRequester(contentFocusRequester) else Modifier),
                                                 onClick = { 
                                                     showPlaybackControls = false
                                                     viewModel.playVod(movie)
@@ -846,7 +902,9 @@ fun MainScreen(
                                                 title = series.name,
                                                 posterUrl = series.cover,
                                                 rating = series.rating,
-                                                modifier = if (index == 0) Modifier.focusRequester(contentFocusRequester) else Modifier,
+                                                modifier = Modifier
+                                                    .onFocusChanged { if (it.isFocused) focusedSeries = series }
+                                                    .then(if (index == 0) Modifier.focusRequester(contentFocusRequester) else Modifier),
                                                 onClick = { 
                                                     viewModel.loadSeriesDetails(series)
                                                     showSeriesDetails = true
