@@ -169,6 +169,16 @@ fun MainScreen(
         }
     }
 
+    LaunchedEffect(showSeriesDetails, showSearchOverlay) {
+        if (!showSeriesDetails && !showSearchOverlay && showChannelList) {
+            try {
+                contentFocusRequester.requestFocus()
+            } catch (e: Exception) {
+                railFocusRequester.requestFocus()
+            }
+        }
+    }
+
     LaunchedEffect(isAnyOverlayVisible) {
         if (!isAnyOverlayVisible) {
             rootFocusRequester.requestFocus()
