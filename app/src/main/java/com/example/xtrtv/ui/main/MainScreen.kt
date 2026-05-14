@@ -825,11 +825,13 @@ fun MainScreen(
                                                     .build(),
                                                 contentDescription = null,
                                                 modifier = Modifier
-                                                    .size(50.dp)
-                                                    .padding(end = 16.dp)
+                                                    .width(85.dp)
+                                                    .height(48.dp)
                                                     .background(Color.Black.copy(alpha = 0.2f), RoundedCornerShape(8.dp)),
                                                 contentScale = androidx.compose.ui.layout.ContentScale.Fit
                                             )
+
+                                            Spacer(modifier = Modifier.width(16.dp))
 
                                             Column(modifier = Modifier.weight(1.5f)) {
                                                 Text(
