@@ -515,7 +515,6 @@ fun MainScreen(
                                         focusCategoryTrigger++
                                     }
                                     focusPlayingNow = false
-                                    focusContentTrigger++
                                 },
                                 modifier = Modifier
                                     .size(56.dp)
