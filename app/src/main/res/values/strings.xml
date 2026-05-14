@@ -48,7 +48,7 @@
     <string name="play_episode_label">Spela Säsong %1$s, Avsnitt %2$s</string>
     <string name="episode_label">Avsnitt %1$s</string>
     <string name="live">LIVE</string>
-    <string name="history">Historik</string>
+    <string name="history">Fortsätt titta</string>
     <string name="track_label">Spår %1$d</string>
     <string name="audio_track_label">Ljudspår %1$d</string>
     <string name="audio_tracks">Ljudspår</string>
