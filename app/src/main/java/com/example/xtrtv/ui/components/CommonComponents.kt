@@ -69,7 +69,7 @@ fun EpgProgressBar(start: Long, stop: Long, isActive: Boolean, timeProvider: () 
             modifier = Modifier
                 .fillMaxWidth(progress)
                 .fillMaxHeight()
-                .background(if (isActive) Turquoise else Color.White, RoundedCornerShape(2.dp))
+                .background(Turquoise, RoundedCornerShape(2.dp))
         )
     }
 }
