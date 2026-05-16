@@ -751,42 +751,64 @@ fun MainScreen(
 
                                 Spacer(modifier = Modifier.height(6.dp))
 
-                                // 2. Meta Info Row (Rating, Genre, Release Date)
+                                // 2. Meta Info Row (Rating, Genre, Release Date or EPG Title/Time)
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
                                     modifier = Modifier.padding(bottom = 12.dp)
                                 ) {
-                                    val rating = if (viewModel.currentMode == MainViewModel.AppMode.VOD) focusedMovie?.rating else focusedSeries?.rating
-                                    if (!rating.isNullOrBlank() && rating != "0") {
-                                        Icon(Icons.Default.Star, null, tint = Color(0xFFFFD700), modifier = Modifier.size(18.dp))
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text(rating, color = Color(0xFFFFD700), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                                        Spacer(modifier = Modifier.width(20.dp))
-                                    }
-
-                                    val genre = if (viewModel.currentMode == MainViewModel.AppMode.VOD) focusedMovie?.genre else focusedSeries?.genre
-                                    Text(
-                                        text = (genre ?: if (viewModel.currentMode == MainViewModel.AppMode.VOD) "FILM" else "SERIE").uppercase(),
-                                        color = Color.Gray,
-                                        style = MaterialTheme.typography.labelLarge,
-                                        letterSpacing = 1.sp
-                                    )
-
-                                    val releaseDate = if (viewModel.currentMode == MainViewModel.AppMode.VOD) focusedMovie?.releaseDate else focusedSeries?.releaseDate
-                                    if (!releaseDate.isNullOrBlank()) {
-                                        Spacer(modifier = Modifier.width(20.dp))
-                                        Text(releaseDate, color = Color.Gray, style = MaterialTheme.typography.labelLarge)
-                                    }
-                                    
-                                    if (viewModel.currentMode == MainViewModel.AppMode.VOD) {
-                                        focusedMovie?.containerExtension?.let {
+                                    if (viewModel.currentMode == MainViewModel.AppMode.LIVE) {
+                                        val epg = viewModel.epgMap[focusedChannel?.streamId]
+                                        if (epg != null) {
+                                            val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
+                                            Text(
+                                                text = "${timeFormat.format(Date(epg.start))} - ${timeFormat.format(Date(epg.stop))}",
+                                                color = Turquoise,
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = FontWeight.Bold
+                                            )
                                             Spacer(modifier = Modifier.width(20.dp))
                                             Text(
-                                                text = it.uppercase(),
-                                                modifier = Modifier.background(Color.DarkGray.copy(alpha = 0.6f), RoundedCornerShape(4.dp)).padding(horizontal = 6.dp, vertical = 2.dp),
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = Color.White
+                                                text = epg.title,
+                                                color = Color.White.copy(alpha = 0.9f),
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
                                             )
+                                        }
+                                    } else {
+                                        val rating = if (viewModel.currentMode == MainViewModel.AppMode.VOD) focusedMovie?.rating else focusedSeries?.rating
+                                        if (!rating.isNullOrBlank() && rating != "0") {
+                                            Icon(Icons.Default.Star, null, tint = Color(0xFFFFD700), modifier = Modifier.size(18.dp))
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text(rating, color = Color(0xFFFFD700), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                            Spacer(modifier = Modifier.width(20.dp))
+                                        }
+
+                                        val genre = if (viewModel.currentMode == MainViewModel.AppMode.VOD) focusedMovie?.genre else focusedSeries?.genre
+                                        Text(
+                                            text = (genre ?: if (viewModel.currentMode == MainViewModel.AppMode.VOD) "FILM" else "SERIE").uppercase(),
+                                            color = Color.Gray,
+                                            style = MaterialTheme.typography.labelLarge,
+                                            letterSpacing = 1.sp
+                                        )
+
+                                        val releaseDate = if (viewModel.currentMode == MainViewModel.AppMode.VOD) focusedMovie?.releaseDate else focusedSeries?.releaseDate
+                                        if (!releaseDate.isNullOrBlank()) {
+                                            Spacer(modifier = Modifier.width(20.dp))
+                                            Text(releaseDate, color = Color.Gray, style = MaterialTheme.typography.labelLarge)
+                                        }
+                                        
+                                        if (viewModel.currentMode == MainViewModel.AppMode.VOD) {
+                                            focusedMovie?.containerExtension?.let {
+                                                Spacer(modifier = Modifier.width(20.dp))
+                                                Text(
+                                                    text = it.uppercase(),
+                                                    modifier = Modifier.background(Color.DarkGray.copy(alpha = 0.6f), RoundedCornerShape(4.dp)).padding(horizontal = 6.dp, vertical = 2.dp),
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = Color.White
+                                                )
+                                            }
                                         }
                                     }
                                 }
