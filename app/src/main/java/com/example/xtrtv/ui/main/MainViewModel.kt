@@ -651,9 +651,48 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             playLastChannel()
         }
         
-        if (oldMode == mode) return
+        if (oldMode == mode && categories.isNotEmpty()) return
         currentMode = mode
         loadInitialData()
+    }
+
+    fun prepareUiForCurrentPlayback() {
+        val targetMode = activePlaybackMode
+        currentMode = targetMode
+        
+        viewModelScope.launch {
+            val type = when(targetMode) {
+                AppMode.LIVE -> "live"
+                AppMode.VOD -> "vod"
+                AppMode.SERIES -> "series"
+            }
+            
+            val cachedCategories = withContext(Dispatchers.IO) {
+                dao.getCategoriesByType(type).map { Category(it.id, cleanCategoryName(it.name), it.type) }
+            }.toMutableList()
+
+            if (targetMode == AppMode.VOD || targetMode == AppMode.SERIES) {
+                val hasHistory = withContext(Dispatchers.IO) {
+                    dao.getHistoryByType(type).isNotEmpty()
+                }
+                if (hasHistory) {
+                    cachedCategories.add(0, Category("history", getApplication<Application>().getString(R.string.history), type))
+                }
+            }
+
+            if (cachedCategories.isNotEmpty()) {
+                categories = cachedCategories
+                
+                val targetCatId = when(targetMode) {
+                    AppMode.LIVE -> currentChannel?.categoryId
+                    AppMode.VOD -> pendingMovie?.categoryId
+                    AppMode.SERIES -> if (currentSeriesId != null) selectedSeries?.categoryId else pendingMovie?.categoryId
+                }
+                
+                val cat = categories.find { it.id == targetCatId } ?: categories.first()
+                selectCategory(cat, forceRefresh = false)
+            }
+        }
     }
 
     fun playLastChannel() {

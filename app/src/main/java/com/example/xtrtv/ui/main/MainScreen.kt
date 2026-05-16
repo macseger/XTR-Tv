@@ -176,6 +176,18 @@ fun MainScreen(
         }
     }
 
+    LaunchedEffect(showChannelList, playingIndex) {
+        if (showChannelList && viewModel.currentMode == MainViewModel.AppMode.LIVE && playingIndex >= 0) {
+            try {
+                // Ensure we scroll to the playing channel and request focus
+                channelListState.scrollToItem(playingIndex)
+                contentFocusRequester.requestFocus()
+            } catch (e: Exception) {
+                Log.e("MainScreen", "Failed to scroll to playing channel", e)
+            }
+        }
+    }
+
     LaunchedEffect(showSeriesDetails, showSearchOverlay) {
         if (!showSeriesDetails && !showSearchOverlay && showChannelList) {
             try {
@@ -326,7 +338,7 @@ fun MainScreen(
                             android.view.KeyEvent.KEYCODE_ENTER,
                             android.view.KeyEvent.KEYCODE_NUMPAD_ENTER -> {
                                 if (viewModel.activePlaybackMode == MainViewModel.AppMode.LIVE) {
-                                    viewModel.changeMode(MainViewModel.AppMode.LIVE)
+                                    viewModel.prepareUiForCurrentPlayback()
                                     showChannelList = true
                                 } else {
                                     viewModel.togglePlayPause()
