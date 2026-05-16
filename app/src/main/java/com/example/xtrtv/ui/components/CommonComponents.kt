@@ -16,6 +16,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -85,7 +86,8 @@ fun LoadingIndicator(text: String) {
     ) {
         Surface(
             shape = MaterialTheme.shapes.medium,
-            colors = SurfaceDefaults.colors(containerColor = Color.Black.copy(alpha = 0.8f))
+            colors = SurfaceDefaults.colors(containerColor = Color.Black.copy(alpha = 0.8f)),
+            modifier = Modifier.focusProperties { canFocus = false }
         ) {
             Row(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),

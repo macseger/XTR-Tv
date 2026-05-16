@@ -18,7 +18,12 @@ data class VodEntity(
     val categoryId: String?,
     val rating: String?,
     val containerExtension: String?,
-    val added: String? = null
+    val added: String? = null,
+    val plot: String? = null,
+    val cast: String? = null,
+    val director: String? = null,
+    val genre: String? = null,
+    val releaseDate: String? = null
 )
 
 @Entity(tableName = "series", indices = [androidx.room.Index("categoryId")])
@@ -29,6 +34,8 @@ data class SeriesEntity(
     val categoryId: String?,
     val rating: String?,
     val plot: String?,
+    val genre: String? = null,
+    val releaseDate: String? = null,
     val lastModified: String? = null
 )
 
@@ -71,7 +78,11 @@ data class PlaybackHistoryEntity(
     val position: Long,
     val duration: Long,
     val seriesId: Int? = null,
-    val lastWatched: Long = System.currentTimeMillis()
+    val lastWatched: Long = System.currentTimeMillis(),
+    val plot: String? = null,
+    val genre: String? = null,
+    val releaseDate: String? = null,
+    val rating: String? = null
 )
 
 data class EpgProgram(

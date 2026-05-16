@@ -243,7 +243,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     chunks.forEachIndexed { index, chunk ->
                         backgroundSyncMessage = "Syncing VOD: ${((index + 1) * 100 * 100 / movies.size).coerceAtMost(100)}%"
                         dao.insertVod(chunk.map { 
-                            VodEntity(it.streamId, it.name, it.streamIcon, it.categoryId ?: "0", it.rating, it.containerExtension, it.added)
+                            VodEntity(
+                                it.streamId, it.name, it.streamIcon, it.categoryId ?: "0", 
+                                it.rating, it.containerExtension, it.added,
+                                it.plot, it.cast, it.director, it.genre, it.releaseDate
+                            )
                         })
                         kotlinx.coroutines.delay(200)
                     }
@@ -257,7 +261,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     chunks.forEachIndexed { index, chunk ->
                         backgroundSyncMessage = "Syncing Series: ${((index + 1) * 100 * 100 / seriesList.size).coerceAtMost(100)}%"
                         dao.insertSeries(chunk.map { 
-                            SeriesEntity(it.seriesId, it.name, it.cover, it.categoryId ?: "0", it.rating, it.plot)
+                            SeriesEntity(it.seriesId, it.name, it.cover, it.categoryId ?: "0", it.rating, it.plot, it.genre, it.releaseDate)
                         })
                         kotlinx.coroutines.delay(200)
                     }
@@ -806,7 +810,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         if (category.id == "history") {
                             vodMovies = withContext(Dispatchers.IO) {
                                 dao.getHistoryByType("vod").map {
-                                    VodMovie(it.streamId, it.name, it.streamIcon, it.categoryId, null, null, null)
+                                    VodMovie(
+                                        it.streamId, it.name, it.streamIcon, it.categoryId, 
+                                        it.rating, null, null, it.plot, null, null, it.genre, it.releaseDate
+                                    )
                                 }
                             }
                         } else {
@@ -817,7 +824,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             if (cachedVod.isNotEmpty() && !forceRefresh) {
                                 val mapped = withContext(Dispatchers.Default) {
                                     cachedVod.map {
-                                        VodMovie(it.streamId, it.name, it.streamIcon, it.categoryId, it.rating, it.added, it.containerExtension)
+                                        VodMovie(
+                                            it.streamId, it.name, it.streamIcon, it.categoryId, 
+                                            it.rating, it.added, it.containerExtension,
+                                            it.plot, it.cast, it.director, it.genre, it.releaseDate
+                                        )
                                     }.sortedByDescending { it.streamId }
                                 }
                                 vodMovies = mapped
@@ -832,7 +843,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                                 dao.getHistoryByType("series")
                                     .distinctBy { it.seriesId ?: it.streamId }
                                     .map {
-                                        Series(it.seriesId ?: it.streamId, it.name, it.streamIcon, null, null, null, null, null, null, it.categoryId)
+                                        Series(
+                                            it.seriesId ?: it.streamId, it.name, it.streamIcon, 
+                                            it.plot, null, null, it.genre, it.releaseDate, it.rating, it.categoryId
+                                        )
                                     }
                             }
                         } else {
@@ -842,7 +856,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             if (cachedSeries.isNotEmpty() && !forceRefresh) {
                                 val mapped = withContext(Dispatchers.Default) {
                                     cachedSeries.map {
-                                        Series(it.seriesId, it.name, it.cover, it.plot, null, null, null, null, it.rating, it.categoryId)
+                                        Series(it.seriesId, it.name, it.cover, it.plot, null, null, it.genre, it.releaseDate, it.rating, it.categoryId)
                                     }.sortedByDescending { it.seriesId }
                                 }
                                 seriesList = mapped
@@ -901,7 +915,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     }
                     withContext(Dispatchers.IO) {
                         dao.insertVod(movies.map { 
-                            VodEntity(it.streamId, it.name, it.streamIcon, it.categoryId, it.rating, it.containerExtension, it.added)
+                            VodEntity(
+                                it.streamId, it.name, it.streamIcon, it.categoryId, 
+                                it.rating, it.containerExtension, it.added,
+                                it.plot, it.cast, it.director, it.genre, it.releaseDate
+                            )
                         })
                     }
                 }
@@ -927,7 +945,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     }
                     withContext(Dispatchers.IO) {
                         dao.insertSeries(apiSeries.map { 
-                            SeriesEntity(it.seriesId, it.name, it.cover, it.categoryId, it.rating, it.plot)
+                            SeriesEntity(it.seriesId, it.name, it.cover, it.categoryId, it.rating, it.plot, it.genre, it.releaseDate)
                         })
                     }
                 }
@@ -1040,7 +1058,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             categoryId = selectedSeries?.categoryId ?: "series",
             rating = selectedSeries?.rating,
             added = null,
-            containerExtension = episode.containerExtension
+            containerExtension = episode.containerExtension,
+            plot = episode.info?.plot ?: selectedSeries?.plot
         )
         pendingMovie = movieRepresentation
 
@@ -1102,7 +1121,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     type = "live",
                     position = 0,
                     duration = 0,
-                    lastWatched = System.currentTimeMillis()
+                    lastWatched = System.currentTimeMillis(),
+                    plot = null,
+                    genre = null,
+                    releaseDate = null,
+                    rating = null
                 )
             )
             loadRecentChannels()
@@ -1209,7 +1232,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         type = if (activePlaybackMode == AppMode.VOD) "vod" else "series",
                         position = position,
                         duration = duration,
-                        seriesId = if (activePlaybackMode == AppMode.SERIES) currentSeriesId else null
+                        seriesId = if (activePlaybackMode == AppMode.SERIES) currentSeriesId else null,
+                        plot = movie.plot,
+                        genre = movie.genre,
+                        releaseDate = movie.releaseDate,
+                        rating = movie.rating
                     )
                 )
             }
@@ -1268,7 +1295,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             
             withContext(Dispatchers.Main) {
                 filteredVod = vodResults.map { 
-                    VodMovie(it.streamId, it.name, it.streamIcon, it.categoryId, it.rating, it.added, it.containerExtension) 
+                    VodMovie(
+                        it.streamId, it.name, it.streamIcon, it.categoryId, 
+                        it.rating, it.added, it.containerExtension,
+                        it.plot, it.cast, it.director, it.genre, it.releaseDate
+                    )
                 }
                 filteredSeries = seriesResults.map {
                     Series(it.seriesId, it.name, it.cover, it.plot, null, null, null, null, it.rating, it.categoryId)

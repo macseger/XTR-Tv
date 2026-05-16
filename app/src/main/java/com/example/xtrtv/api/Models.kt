@@ -42,7 +42,12 @@ data class VodMovie(
     @SerializedName("category_id") val categoryId: String?,
     @SerializedName("rating") val rating: String?,
     @SerializedName("added") val added: String?,
-    @SerializedName("container_extension") val containerExtension: String?
+    @SerializedName("container_extension") val containerExtension: String?,
+    @SerializedName("plot") val plot: String? = null,
+    @SerializedName("cast") val cast: String? = null,
+    @SerializedName("director") val director: String? = null,
+    @SerializedName("genre") val genre: String? = null,
+    @SerializedName("release_date") val releaseDate: String? = null
 )
 
 data class Series(
