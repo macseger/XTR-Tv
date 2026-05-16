@@ -93,6 +93,7 @@ fun MainScreen(
     var showLogoutDialog by remember { mutableStateOf(false) }
     var showUrlDialog by remember { mutableStateOf(false) }
     var showCustomEpgDialog by remember { mutableStateOf(false) }
+    var showRecentChannels by remember { mutableStateOf(false) }
     var lastInteractionTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var focusContentTrigger by remember { mutableIntStateOf(0) }
     var focusCategoryTrigger by remember { mutableIntStateOf(0) }
@@ -106,7 +107,7 @@ fun MainScreen(
             showChannelList || showContextMenu || showPlaybackControls || 
             showSeriesDetails || showSearchOverlay || showExitDialog || 
             showLogoutDialog || showUrlDialog || viewModel.showResumeDialog ||
-            showAudioMenu || viewModel.showNextEpisodeDialog
+            showAudioMenu || viewModel.showNextEpisodeDialog || showRecentChannels
         }
     }
     
@@ -128,6 +129,7 @@ fun MainScreen(
     val contentFocusRequester = remember { FocusRequester() }
     val contextMenuFocusRequester = remember { FocusRequester() }
     val playbackFocusRequester = remember { FocusRequester() }
+    val recentChannelsFocusRequester = remember { FocusRequester() }
 
     val playingIndex = remember(viewModel.channels, viewModel.currentChannel) {
         viewModel.channels.indexOfFirst { it.streamId == viewModel.currentChannel?.streamId }
@@ -256,7 +258,7 @@ fun MainScreen(
 
     BackHandler(enabled = true) {
         // REGEL 1: Om någon meny/overlay är öppen -> Stäng ALLT direkt
-        if (showChannelList || showContextMenu || showSeriesDetails || showSearchOverlay || showPlaybackControls) {
+        if (showChannelList || showContextMenu || showSeriesDetails || showSearchOverlay || showPlaybackControls || showRecentChannels) {
             showChannelList = false
             showContextMenu = false
             showSubtitleMenu = false
@@ -264,6 +266,7 @@ fun MainScreen(
             showSeriesDetails = false
             showSearchOverlay = false
             showPlaybackControls = false
+            showRecentChannels = false
             return@BackHandler
         }
 
@@ -354,7 +357,11 @@ fun MainScreen(
                                     viewModel.skipForward()
                                     showPlaybackControls = true
                                     true
-                                } else false
+                                } else {
+                                    viewModel.loadRecentChannels()
+                                    showRecentChannels = true
+                                    true
+                                }
                             }
                             else -> false
                         }
@@ -1321,5 +1328,108 @@ fun MainScreen(
                 onDismiss = { showCustomEpgDialog = false }
             )
         }
+        if (showRecentChannels) {
+            RecentChannelsOverlay(
+                channels = viewModel.recentChannels,
+                onChannelClick = { channel ->
+                    viewModel.playChannel(channel)
+                    showRecentChannels = false
+                },
+                onDismiss = { showRecentChannels = false },
+                focusRequester = recentChannelsFocusRequester
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+fun RecentChannelsOverlay(
+    channels: List<LiveStream>,
+    onChannelClick: (LiveStream) -> Unit,
+    onDismiss: () -> Unit,
+    focusRequester: FocusRequester
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.5f))
+            .clickable(onClick = onDismiss),
+        contentAlignment = Alignment.CenterEnd
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxHeight()
+                .width(300.dp)
+                .background(Color(0xFF121212).copy(alpha = 0.95f))
+                .padding(24.dp)
+                .clickable(enabled = false) {},
+            horizontalAlignment = Alignment.Start
+        ) {
+            Text(
+                text = "SENASTE KANALER",
+                style = MaterialTheme.typography.labelMedium,
+                color = Turquoise,
+                letterSpacing = 2.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(bottom = 24.dp)
+            )
+
+            if (channels.isEmpty()) {
+                Text(
+                    text = "Ingen historik än",
+                    color = Color.Gray,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                itemsIndexed(channels) { index, channel ->
+                    Surface(
+                        onClick = { onChannelClick(channel) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .then(if (index == 0) Modifier.focusRequester(focusRequester) else Modifier),
+                        colors = ClickableSurfaceDefaults.colors(
+                            containerColor = Color.White.copy(alpha = 0.05f),
+                            focusedContainerColor = Color.White,
+                            contentColor = Color.White,
+                            focusedContentColor = Color.Black
+                        ),
+                        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(12.dp)),
+                        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.05f)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            AsyncImage(
+                                model = channel.streamIcon,
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .size(width = 60.dp, height = 34.dp)
+                                    .background(Color.Black.copy(alpha = 0.2f), RoundedCornerShape(4.dp)),
+                                contentScale = androidx.compose.ui.layout.ContentScale.Fit
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(
+                                text = channel.name,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
     }
 }

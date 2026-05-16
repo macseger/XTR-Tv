@@ -90,6 +90,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     var selectedCategory by mutableStateOf<Category?>(null)
     var currentChannel by mutableStateOf<LiveStream?>(null)
     
+    var recentChannels by mutableStateOf<List<LiveStream>>(emptyList())
+    
     // Resume dialog state
     var pendingMovie by mutableStateOf<VodMovie?>(null)
     var pendingEpisode by mutableStateOf<com.example.xtrtv.api.Episode?>(null)
@@ -1088,6 +1090,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         
         // Save as last played channel
         prefs.lastChannelId = stream.streamId
+
+        // Save to history for "Recent Channels"
+        viewModelScope.launch(Dispatchers.IO) {
+            dao.insertHistory(
+                PlaybackHistoryEntity(
+                    streamId = stream.streamId,
+                    name = stream.name,
+                    streamIcon = stream.streamIcon,
+                    categoryId = stream.categoryId,
+                    type = "live",
+                    position = 0,
+                    duration = 0,
+                    lastWatched = System.currentTimeMillis()
+                )
+            )
+            loadRecentChannels()
+        }
         
         // Stop current playback
         player?.stop()
@@ -1380,6 +1399,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (useInternalSwedishEpg) {
             customEpgUrl = null
             prefs.customEpgUrl = null
+        }
+    }
+
+    fun loadRecentChannels() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val history = dao.getHistoryByType("live").take(10)
+            withContext(Dispatchers.Main) {
+                recentChannels = history.map {
+                    LiveStream(it.streamId, it.name, it.streamIcon, it.categoryId ?: "0", null, null)
+                }
+            }
         }
     }
 
