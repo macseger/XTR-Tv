@@ -118,6 +118,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     var selectedAudioId by mutableStateOf<String?>(null)
         private set
 
+    var channelEpgList by mutableStateOf<List<EpgEntity>>(emptyList())
+    var isFetchingChannelEpg by mutableStateOf(false)
+
     // Playback state
     var isPlaying by mutableStateOf(false)
     var playbackPosition by mutableLongStateOf(0L)
@@ -1239,6 +1242,40 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         rating = movie.rating
                     )
                 )
+            }
+        }
+    }
+
+    fun loadChannelEpg(stream: LiveStream) {
+        viewModelScope.launch(Dispatchers.IO) {
+            isFetchingChannelEpg = true
+            try {
+                val candidates = mutableListOf<String>()
+                if (!stream.epgChannelId.isNullOrBlank() && stream.epgChannelId != "null") {
+                    candidates.add(stream.epgChannelId)
+                }
+                channelIdMap[stream.name]?.let { candidates.add(it) }
+                normalizedChannelIdMap[normalizeName(stream.name)]?.let { candidates.add(it) }
+                
+                val epgId = candidates.distinct().firstOrNull()
+
+                if (epgId != null) {
+                    val now = System.currentTimeMillis()
+                    val epg = dao.getEpgForChannel(epgId, now - 3600_000) // Start from 1h ago to show current
+                        .filter { it.start < now + (12 * 3600 * 1000) }
+                    
+                    withContext(Dispatchers.Main) {
+                        channelEpgList = epg
+                    }
+                } else {
+                    withContext(Dispatchers.Main) {
+                        channelEpgList = emptyList()
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading channel EPG", e)
+            } finally {
+                isFetchingChannelEpg = false
             }
         }
     }

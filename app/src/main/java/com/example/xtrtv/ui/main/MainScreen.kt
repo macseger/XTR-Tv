@@ -65,6 +65,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.xtrtv.R
 import com.example.xtrtv.data.*
+import com.example.xtrtv.data.db.*
 import com.example.xtrtv.api.*
 import com.example.xtrtv.ui.components.*
 import com.example.xtrtv.utils.UpdateManager
@@ -94,6 +95,7 @@ fun MainScreen(
     var showUrlDialog by remember { mutableStateOf(false) }
     var showCustomEpgDialog by remember { mutableStateOf(false) }
     var showRecentChannels by remember { mutableStateOf(false) }
+    var showChannelEpg by remember { mutableStateOf(false) }
     var lastInteractionTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var focusContentTrigger by remember { mutableIntStateOf(0) }
     var focusCategoryTrigger by remember { mutableIntStateOf(0) }
@@ -107,7 +109,8 @@ fun MainScreen(
             showChannelList || showContextMenu || showPlaybackControls || 
             showSeriesDetails || showSearchOverlay || showExitDialog || 
             showLogoutDialog || showUrlDialog || viewModel.showResumeDialog ||
-            showAudioMenu || viewModel.showNextEpisodeDialog || showRecentChannels
+            showAudioMenu || viewModel.showNextEpisodeDialog || showRecentChannels ||
+            showChannelEpg
         }
     }
     
@@ -130,6 +133,7 @@ fun MainScreen(
     val contextMenuFocusRequester = remember { FocusRequester() }
     val playbackFocusRequester = remember { FocusRequester() }
     val recentChannelsFocusRequester = remember { FocusRequester() }
+    val channelEpgFocusRequester = remember { FocusRequester() }
 
     val playingIndex = remember(viewModel.channels, viewModel.currentChannel) {
         viewModel.channels.indexOfFirst { it.streamId == viewModel.currentChannel?.streamId }
@@ -252,7 +256,7 @@ fun MainScreen(
 
     BackHandler(enabled = true) {
         // REGEL 1: Om någon meny/overlay är öppen -> Stäng ALLT direkt
-        if (showChannelList || showContextMenu || showSeriesDetails || showSearchOverlay || showPlaybackControls || showRecentChannels) {
+        if (showChannelList || showContextMenu || showSeriesDetails || showSearchOverlay || showPlaybackControls || showRecentChannels || showChannelEpg) {
             showChannelList = false
             showContextMenu = false
             showSubtitleMenu = false
@@ -261,6 +265,7 @@ fun MainScreen(
             showSearchOverlay = false
             showPlaybackControls = false
             showRecentChannels = false
+            showChannelEpg = false
             return@BackHandler
         }
 
@@ -344,7 +349,13 @@ fun MainScreen(
                                     viewModel.skipBackward()
                                     showPlaybackControls = true
                                     true
-                                } else false
+                                } else {
+                                    viewModel.currentChannel?.let {
+                                        viewModel.loadChannelEpg(it)
+                                        showChannelEpg = true
+                                        true
+                                    } ?: false
+                                }
                             }
                             android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> {
                                 if (viewModel.activePlaybackMode != MainViewModel.AppMode.LIVE) {
@@ -1089,28 +1100,6 @@ fun MainScreen(
                             }
                             item {
                                 ContextMenuItem(
-                                    text = stringResource(R.string.add_custom_epg),
-                                    icon = { Icon(Icons.Default.AddLink, null, modifier = Modifier.size(20.dp)) },
-                                    onClick = {
-                                        showCustomEpgDialog = true
-                                        showContextMenu = false
-                                    }
-                                )
-                            }
-                            item {
-                                ContextMenuItem(
-                                    text = stringResource(R.string.use_swedish_epg),
-                                    icon = { Icon(Icons.Default.LocationOn, null, modifier = Modifier.size(20.dp)) },
-                                    isSelected = viewModel.useInternalSwedishEpg,
-                                    onClick = {
-                                        viewModel.toggleInternalSwedishEpg()
-                                        viewModel.refreshEpg()
-                                        showContextMenu = false
-                                    }
-                                )
-                            }
-                            item {
-                                ContextMenuItem(
                                     text = stringResource(R.string.refresh_vod_series),
                                     icon = { Icon(Icons.Default.MovieFilter, null, modifier = Modifier.size(20.dp)) },
                                     onClick = {
@@ -1134,6 +1123,28 @@ fun MainScreen(
                                     icon = { Icon(Icons.Default.Audiotrack, null, modifier = Modifier.size(20.dp)) },
                                     onClick = {
                                         showAudioMenu = true
+                                    }
+                                )
+                            }
+                            item {
+                                ContextMenuItem(
+                                    text = stringResource(R.string.add_custom_epg),
+                                    icon = { Icon(Icons.Default.AddLink, null, modifier = Modifier.size(20.dp)) },
+                                    onClick = {
+                                        showCustomEpgDialog = true
+                                        showContextMenu = false
+                                    }
+                                )
+                            }
+                            item {
+                                ContextMenuItem(
+                                    text = stringResource(R.string.use_swedish_epg),
+                                    icon = { Icon(Icons.Default.LocationOn, null, modifier = Modifier.size(20.dp)) },
+                                    isSelected = viewModel.useInternalSwedishEpg,
+                                    onClick = {
+                                        viewModel.toggleInternalSwedishEpg()
+                                        viewModel.refreshEpg()
+                                        showContextMenu = false
                                     }
                                 )
                             }
@@ -1163,16 +1174,6 @@ fun MainScreen(
                                     icon = { Icon(Icons.Default.Language, null, modifier = Modifier.size(20.dp)) },
                                     onClick = {
                                         showUrlDialog = true
-                                        showContextMenu = false
-                                    }
-                                )
-                            }
-                            item {
-                                ContextMenuItem(
-                                    text = stringResource(R.string.logout),
-                                    icon = { Icon(Icons.AutoMirrored.Filled.Logout, null, modifier = Modifier.size(20.dp)) },
-                                    onClick = {
-                                        showLogoutDialog = true
                                         showContextMenu = false
                                     }
                                 )
@@ -1210,6 +1211,16 @@ fun MainScreen(
                                         } else {
                                             viewModel.checkForUpdates()
                                         }
+                                    }
+                                )
+                            }
+                            item {
+                                ContextMenuItem(
+                                    text = stringResource(R.string.logout),
+                                    icon = { Icon(Icons.AutoMirrored.Filled.Logout, null, modifier = Modifier.size(20.dp)) },
+                                    onClick = {
+                                        showLogoutDialog = true
+                                        showContextMenu = false
                                     }
                                 )
                             }
@@ -1329,6 +1340,15 @@ fun MainScreen(
                 focusRequester = recentChannelsFocusRequester
             )
         }
+        if (showChannelEpg) {
+            ChannelEpgOverlay(
+                channel = viewModel.currentChannel,
+                epgList = viewModel.channelEpgList,
+                isFetching = viewModel.isFetchingChannelEpg,
+                onDismiss = { showChannelEpg = false },
+                focusRequester = channelEpgFocusRequester
+            )
+        }
     }
 }
 
@@ -1357,7 +1377,7 @@ fun RecentChannelsOverlay(
             horizontalAlignment = Alignment.Start
         ) {
             Text(
-                text = "SENASTE KANALER",
+                text = stringResource(R.string.recent_channels),
                 style = MaterialTheme.typography.labelMedium,
                 color = Turquoise,
                 letterSpacing = 2.sp,
@@ -1367,7 +1387,7 @@ fun RecentChannelsOverlay(
 
             if (channels.isEmpty()) {
                 Text(
-                    text = "Ingen historik än",
+                    text = stringResource(R.string.no_history),
                     color = Color.Gray,
                     style = MaterialTheme.typography.bodyMedium
                 )
@@ -1412,6 +1432,153 @@ fun RecentChannelsOverlay(
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
+    }
+}
+
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+fun ChannelEpgOverlay(
+    channel: LiveStream?,
+    epgList: List<EpgEntity>,
+    isFetching: Boolean,
+    onDismiss: () -> Unit,
+    focusRequester: FocusRequester
+) {
+    val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.5f))
+            .clickable(onClick = onDismiss),
+        contentAlignment = Alignment.CenterStart
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxHeight()
+                .width(400.dp)
+                .background(Color(0xFF121212).copy(alpha = 0.95f))
+                .padding(24.dp)
+                .clickable(enabled = false) {},
+            horizontalAlignment = Alignment.Start
+        ) {
+            Row(
+                modifier = Modifier.padding(bottom = 24.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                AsyncImage(
+                    model = channel?.streamIcon,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(width = 80.dp, height = 45.dp)
+                        .background(Color.Black.copy(alpha = 0.2f), RoundedCornerShape(4.dp)),
+                    contentScale = androidx.compose.ui.layout.ContentScale.Fit
+                )
+                Spacer(modifier = Modifier.width(16.dp))
+                Column {
+                    Text(
+                        text = channel?.name ?: "",
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = stringResource(R.string.epg_12h),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Turquoise,
+                        letterSpacing = 1.sp
+                    )
+                }
+            }
+
+            if (isFetching) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    androidx.compose.material3.CircularProgressIndicator(color = Turquoise)
+                }
+            } else if (epgList.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(
+                        text = stringResource(R.string.no_epg_info),
+                        color = Color.Gray,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    itemsIndexed(epgList) { index, program ->
+                        val isNow = System.currentTimeMillis() in program.start..program.stop
+                        
+                        Surface(
+                            onClick = { /* Could show details if wanted */ },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .then(if (index == 0) Modifier.focusRequester(focusRequester) else Modifier),
+                            colors = ClickableSurfaceDefaults.colors(
+                                containerColor = if (isNow) Turquoise.copy(alpha = 0.1f) else Color.White.copy(alpha = 0.05f),
+                                focusedContainerColor = Color.White,
+                                contentColor = if (isNow) Turquoise else Color.White,
+                                focusedContentColor = Color.Black
+                            ),
+                            shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(12.dp)),
+                            scale = ClickableSurfaceDefaults.scale(focusedScale = 1.02f)
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "${timeFormat.format(Date(program.start))} - ${timeFormat.format(Date(program.stop))}",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isNow) Turquoise else Color.Gray
+                                    )
+                                    if (isNow) {
+                                        Text(
+                                            text = stringResource(R.string.just_now),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier
+                                                .background(Turquoise, RoundedCornerShape(4.dp))
+                                                .padding(horizontal = 4.dp, vertical = 2.dp),
+                                            color = Color.Black
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = program.title,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                if (!program.description.isNullOrBlank()) {
+                                    Text(
+                                        text = program.description,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = if (isNow) Color.Unspecified else Color.Gray,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.padding(top = 4.dp)
+                                    )
+                                }
+                            }
                         }
                     }
                 }
