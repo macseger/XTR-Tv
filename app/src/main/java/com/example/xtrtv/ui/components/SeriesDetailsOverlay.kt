@@ -222,7 +222,7 @@ fun SeriesDetailsOverlay(
                                 scale = ClickableSurfaceDefaults.scale(focusedScale = 1.05f)
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(horizontal = 20.dp),
+                                    modifier = Modifier.fillMaxHeight().padding(horizontal = 20.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.Center
                                 ) {
