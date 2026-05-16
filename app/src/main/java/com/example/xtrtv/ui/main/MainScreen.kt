@@ -1400,7 +1400,8 @@ fun MainScreen(
                     showRecentChannels = false
                 },
                 onDismiss = { showRecentChannels = false },
-                focusRequester = recentChannelsFocusRequester
+                focusRequester = recentChannelsFocusRequester,
+                viewModel = viewModel
             )
         }
         if (showChannelEpg) {
@@ -1409,7 +1410,8 @@ fun MainScreen(
                 epgList = viewModel.channelEpgList,
                 isFetching = viewModel.isFetchingChannelEpg,
                 onDismiss = { showChannelEpg = false },
-                focusRequester = channelEpgFocusRequester
+                focusRequester = channelEpgFocusRequester,
+                viewModel = viewModel
             )
         }
     }
@@ -1421,7 +1423,8 @@ fun RecentChannelsOverlay(
     channels: List<LiveStream>,
     onChannelClick: (LiveStream) -> Unit,
     onDismiss: () -> Unit,
-    focusRequester: FocusRequester
+    focusRequester: FocusRequester,
+    viewModel: MainViewModel
 ) {
     Box(
         modifier = Modifier
@@ -1479,8 +1482,23 @@ fun RecentChannelsOverlay(
                             modifier = Modifier.padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
+                            val context = LocalContext.current
+                            val normalizedName = remember(channel.name) { viewModel.normalizeName(channel.name) }
+                            val localIconResId = remember(normalizedName) {
+                                context.resources.getIdentifier(normalizedName, "drawable", context.packageName)
+                            }
+
                             AsyncImage(
-                                model = channel.streamIcon,
+                                model = ImageRequest.Builder(LocalContext.current)
+                                    .data(channel.streamIcon)
+                                    .apply {
+                                        if (localIconResId != 0) {
+                                            error(localIconResId)
+                                            fallback(localIconResId)
+                                        }
+                                    }
+                                    .crossfade(true)
+                                    .build(),
                                 contentDescription = null,
                                 modifier = Modifier
                                     .size(width = 60.dp, height = 34.dp)
@@ -1514,7 +1532,8 @@ fun ChannelEpgOverlay(
     epgList: List<EpgEntity>,
     isFetching: Boolean,
     onDismiss: () -> Unit,
-    focusRequester: FocusRequester
+    focusRequester: FocusRequester,
+    viewModel: MainViewModel
 ) {
     val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
 
@@ -1538,14 +1557,31 @@ fun ChannelEpgOverlay(
                 modifier = Modifier.padding(bottom = 24.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                AsyncImage(
-                    model = channel?.streamIcon,
-                    contentDescription = null,
-                    modifier = Modifier
-                        .size(width = 80.dp, height = 45.dp)
-                        .background(Color.Black.copy(alpha = 0.2f), RoundedCornerShape(4.dp)),
-                    contentScale = androidx.compose.ui.layout.ContentScale.Fit
-                )
+                if (channel != null) {
+                    val context = LocalContext.current
+                    val normalizedName = remember(channel.name) { viewModel.normalizeName(channel.name) }
+                    val localIconResId = remember(normalizedName) {
+                        context.resources.getIdentifier(normalizedName, "drawable", context.packageName)
+                    }
+
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(channel.streamIcon)
+                            .apply {
+                                if (localIconResId != 0) {
+                                    error(localIconResId)
+                                    fallback(localIconResId)
+                                }
+                            }
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = null,
+                        modifier = Modifier
+                            .size(width = 80.dp, height = 45.dp)
+                            .background(Color.Black.copy(alpha = 0.2f), RoundedCornerShape(4.dp)),
+                        contentScale = androidx.compose.ui.layout.ContentScale.Fit
+                    )
+                }
                 Spacer(modifier = Modifier.width(16.dp))
                 Column {
                     Text(
