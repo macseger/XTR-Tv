@@ -133,6 +133,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     // Search state
     var searchQuery by mutableStateOf("")
+    var searchHistory by mutableStateOf<List<String>>(emptyList())
     var filteredVod by mutableStateOf<List<VodMovie>>(emptyList())
     var filteredSeries by mutableStateOf<List<Series>>(emptyList())
 
@@ -1014,7 +1015,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             
             val history = withContext(Dispatchers.IO) { dao.getHistoryById(movie.streamId) }
             
-            if (history != null && history.position > 10_000 && !fromStart && !showResumeDialog) {
+            if (history != null && history.position > 15_000 && !fromStart && !showResumeDialog) {
                 savedPosition = history.position
                 showResumeDialog = true
                 return@launch
@@ -1109,7 +1110,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 val history = withContext(Dispatchers.IO) { dao.getHistoryById(streamId) }
                 
-                if (history != null && history.position > 10_000 && !fromStart && !showResumeDialog) {
+                if (history != null && history.position > 15_000 && !fromStart && !showResumeDialog) {
                     savedPosition = history.position
                     showResumeDialog = true
                     return@launch
@@ -1261,10 +1262,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (duration <= 0) return
         
         viewModelScope.launch(Dispatchers.IO) {
-            // If near end (95%), delete from history or mark as finished
-            if (position > duration * 0.95) {
+            // Logic:
+            // 1. If near the absolute end (97%+), we consider it "finished" and remove from history
+            // 2. If at least 10 seconds in, we save progress
+            // 3. We use a 10s margin from the end to keep it in history
+            
+            val isNearEnd = position > (duration - 10_000) || position > (duration * 0.97)
+            
+            if (isNearEnd) {
+                Log.d(TAG, "Content finished (97%+), removing from history: ${movie.name}")
                 dao.deleteHistory(movie.streamId)
-            } else if (position > 5000) {
+            } else if (position > 10_000) {
                 dao.insertHistory(
                     PlaybackHistoryEntity(
                         streamId = movie.streamId,
@@ -1359,6 +1367,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (query.length < 2) {
             filteredVod = emptyList()
             filteredSeries = emptyList()
+            loadSearchHistory()
             return
         }
 
@@ -1381,6 +1390,30 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     Series(it.seriesId, it.name, it.cover, it.plot, null, null, null, null, it.rating, it.categoryId)
                 }
             }
+        }
+    }
+
+    fun saveSearchQuery(query: String) {
+        if (query.isBlank() || query.length < 2) return
+        viewModelScope.launch(Dispatchers.IO) {
+            dao.insertSearchQuery(SearchHistoryEntity(query.trim()))
+            loadSearchHistory()
+        }
+    }
+
+    fun loadSearchHistory() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val history = dao.getRecentSearches().map { it.query }
+            withContext(Dispatchers.Main) {
+                searchHistory = history
+            }
+        }
+    }
+
+    fun deleteSearchQuery(query: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            dao.deleteSearchQuery(query)
+            loadSearchHistory()
         }
     }
 

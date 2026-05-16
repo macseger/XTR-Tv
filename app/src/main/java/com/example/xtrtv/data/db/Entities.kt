@@ -85,6 +85,12 @@ data class PlaybackHistoryEntity(
     val rating: String? = null
 )
 
+@Entity(tableName = "search_history")
+data class SearchHistoryEntity(
+    @PrimaryKey val query: String,
+    val lastUsed: Long = System.currentTimeMillis()
+)
+
 data class EpgProgram(
     val title: String,
     val start: Long,

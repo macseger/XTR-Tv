@@ -6,8 +6,11 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.OutlinedTextField
@@ -21,7 +24,9 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.tv.material3.*
 import com.example.xtrtv.R
 import com.example.xtrtv.ui.main.MainViewModel
@@ -36,6 +41,10 @@ fun SearchOverlay(
     onOpenSeries: (com.example.xtrtv.api.Series) -> Unit
 ) {
     val focusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) {
+        viewModel.loadSearchHistory()
+    }
     
     Box(
         modifier = Modifier
@@ -86,6 +95,16 @@ fun SearchOverlay(
                     modifier = Modifier.fillMaxSize(),
                     verticalArrangement = Arrangement.spacedBy(24.dp)
                 ) {
+                    if (viewModel.filteredVod.isNotEmpty() || viewModel.filteredSeries.isNotEmpty()) {
+                        item {
+                            // Suggest saving this query if results were found
+                            LaunchedEffect(viewModel.searchQuery) {
+                                // We could automatically save, or wait for a click. 
+                                // Let's save it when they actually interact with a result in the UI.
+                            }
+                        }
+                    }
+
                     if (viewModel.filteredVod.isNotEmpty()) {
                         item {
                             Text(stringResource(R.string.movies), style = MaterialTheme.typography.labelLarge, color = Color.Gray)
@@ -97,7 +116,10 @@ fun SearchOverlay(
                                             title = movie.name,
                                             posterUrl = movie.streamIcon,
                                             rating = movie.rating,
-                                            onClick = { onPlayVod(movie) }
+                                            onClick = { 
+                                                viewModel.saveSearchQuery(viewModel.searchQuery)
+                                                onPlayVod(movie) 
+                                            }
                                         )
                                     }
                                 }
@@ -116,7 +138,10 @@ fun SearchOverlay(
                                             title = series.name,
                                             posterUrl = series.cover,
                                             rating = series.rating,
-                                            onClick = { onOpenSeries(series) }
+                                            onClick = { 
+                                                viewModel.saveSearchQuery(viewModel.searchQuery)
+                                                onOpenSeries(series) 
+                                            }
                                         )
                                     }
                                 }
@@ -133,12 +158,56 @@ fun SearchOverlay(
                     }
                 }
             } else {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(
-                        if (viewModel.searchQuery.isEmpty()) stringResource(R.string.start_typing_to_search) 
-                        else stringResource(R.string.search_min_chars), 
-                        color = Color.Gray
-                    )
+                // Show Search History when query is empty or too short
+                Column(modifier = Modifier.fillMaxSize()) {
+                    if (viewModel.searchHistory.isNotEmpty()) {
+                        Text(
+                            text = "SENASTE SÖKNINGAR",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Turquoise,
+                            letterSpacing = 2.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(bottom = 16.dp)
+                        )
+                        
+                        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            items(viewModel.searchHistory) { query ->
+                                Surface(
+                                    onClick = { viewModel.performSearch(query) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = ClickableSurfaceDefaults.colors(
+                                        containerColor = Color.White.copy(alpha = 0.05f),
+                                        focusedContainerColor = Color.White,
+                                        contentColor = Color.White,
+                                        focusedContentColor = Color.Black
+                                    ),
+                                    shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(8.dp))
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(Icons.Default.History, null, modifier = Modifier.size(20.dp))
+                                        Spacer(modifier = Modifier.width(16.dp))
+                                        Text(text = query, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                                        
+                                        // Delete button
+                                        IconButton(onClick = { viewModel.deleteSearchQuery(query) }) {
+                                            Icon(Icons.Default.Close, null, modifier = Modifier.size(16.dp))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text(
+                                if (viewModel.searchQuery.isEmpty()) stringResource(R.string.start_typing_to_search) 
+                                else stringResource(R.string.search_min_chars), 
+                                color = Color.Gray
+                            )
+                        }
+                    }
                 }
             }
         }

@@ -95,4 +95,14 @@ interface AppDao {
 
     @Query("DELETE FROM playback_history WHERE streamId = :streamId")
     suspend fun deleteHistory(streamId: Int)
+
+    // Search History
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertSearchQuery(search: SearchHistoryEntity)
+
+    @Query("SELECT * FROM search_history ORDER BY lastUsed DESC LIMIT 10")
+    suspend fun getRecentSearches(): List<SearchHistoryEntity>
+
+    @Query("DELETE FROM search_history WHERE `query` = :query")
+    suspend fun deleteSearchQuery(query: String)
 }
