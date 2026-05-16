@@ -278,6 +278,7 @@ fun MainScreen(
             showPlaybackControls = false
             showRecentChannels = false
             showChannelEpg = false
+            viewModel.showNextEpisodeDialog = false
             return@BackHandler
         }
 
@@ -311,16 +312,39 @@ fun MainScreen(
                     lastInteractionTime = System.currentTimeMillis()
                 }
 
+                // Global Back handling for TV to ensure 1-click close
+                if (event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_BACK) {
+                    if (isAnyOverlayVisible) {
+                        if (event.type == KeyEventType.KeyUp) {
+                            showChannelList = false
+                            showContextMenu = false
+                            showSubtitleMenu = false
+                            showAudioMenu = false
+                            showSeriesDetails = false
+                            showSearchOverlay = false
+                            showPlaybackControls = false
+                            showRecentChannels = false
+                            showChannelEpg = false
+                            showUrlDialog = false
+                            showLogoutDialog = false
+                            showExitDialog = false
+                            viewModel.showResumeDialog = false
+                            viewModel.showNextEpisodeDialog = false
+                        }
+                        return@onKeyEvent true
+                    } else if (viewModel.activePlaybackMode != MainViewModel.AppMode.LIVE) {
+                        if (event.type == KeyEventType.KeyUp) {
+                            viewModel.changeMode(viewModel.activePlaybackMode)
+                            showChannelList = true
+                        }
+                        return@onKeyEvent true
+                    }
+                    return@onKeyEvent false // Let BackHandler handle exit dialog for LIVE mode
+                }
+
                 if (!isAnyOverlayVisible) {
                     if (event.type == KeyEventType.KeyDown) {
                         when (event.nativeKeyEvent.keyCode) {
-                            android.view.KeyEvent.KEYCODE_BACK -> {
-                                if (viewModel.activePlaybackMode != MainViewModel.AppMode.LIVE) {
-                                    viewModel.changeMode(viewModel.activePlaybackMode)
-                                    showChannelList = true
-                                    return@onKeyEvent true
-                                }
-                            }
                             android.view.KeyEvent.KEYCODE_DPAD_CENTER,
                             android.view.KeyEvent.KEYCODE_ENTER,
                             android.view.KeyEvent.KEYCODE_NUMPAD_ENTER -> {
