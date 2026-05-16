@@ -74,23 +74,29 @@ fun SeriesDetailsOverlay(
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
-                alpha = 0.4f
+                alpha = 0.3f
             )
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(
                         Brush.verticalGradient(
-                            colors = listOf(Color.Transparent, Color.Black),
+                            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.8f), Color.Black),
                             startY = 0f,
-                            endY = 1200f
+                            endY = 1400f
                         )
                     )
             )
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.5f))
+                    .background(
+                        Brush.horizontalGradient(
+                            colors = listOf(Color.Black, Color.Black.copy(alpha = 0.6f), Color.Transparent),
+                            startX = 0f,
+                            endX = 2000f
+                        )
+                    )
             )
         }
 
@@ -103,13 +109,17 @@ fun SeriesDetailsOverlay(
                     .padding(horizontal = 60.dp, vertical = 40.dp)
                     .clickable(enabled = false) {}
             ) {
-                // Left side: Large Poster & Info
-                Column(modifier = Modifier.weight(1.2f).fillMaxHeight().padding(end = 60.dp)) {
+                // Left side: Poster & Detailed Plot
+                Column(modifier = Modifier.width(260.dp).fillMaxHeight().padding(end = 40.dp)) {
                     Surface(
                         onClick = {},
-                        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(16.dp)),
-                        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.05f),
-                        modifier = Modifier.fillMaxWidth().aspectRatio(0.7f)
+                        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(12.dp)),
+                        modifier = Modifier.width(220.dp).aspectRatio(0.7f),
+                        border = ClickableSurfaceDefaults.border(
+                            border = Border(androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.15f))),
+                            focusedBorder = Border(androidx.compose.foundation.BorderStroke(2.dp, Turquoise))
+                        ),
+                        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.05f)
                     ) {
                         AsyncImage(
                             model = details.info?.cover,
@@ -121,20 +131,11 @@ fun SeriesDetailsOverlay(
                     
                     Spacer(modifier = Modifier.height(32.dp))
                     
-                    Text(
-                        text = details.info?.name ?: "",
-                        style = MaterialTheme.typography.displaySmall,
-                        color = Color.White,
-                        fontWeight = FontWeight.Black,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(vertical = 12.dp)
+                        modifier = Modifier.padding(bottom = 12.dp)
                     ) {
-                        Icon(Icons.Default.Star, null, tint = Color(0xFFFFD700), modifier = Modifier.size(20.dp))
+                        Icon(Icons.Default.Star, null, tint = Color(0xFFFFD700), modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = details.info?.rating ?: "N/A",
@@ -144,163 +145,189 @@ fun SeriesDetailsOverlay(
                         )
                         Spacer(modifier = Modifier.width(16.dp))
                         Text(
-                            text = details.info?.genre ?: "",
+                            text = details.info?.releaseDate?.take(4) ?: "",
                             style = MaterialTheme.typography.titleMedium,
-                            color = Color.White.copy(alpha = 0.6f)
+                            color = Color.White.copy(alpha = 0.4f)
                         )
                     }
+
+                    Text(
+                        text = "INNEHÅLL",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Turquoise,
+                        letterSpacing = 1.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
                     
                     Text(
                         text = details.info?.plot ?: "",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = Color.White.copy(alpha = 0.8f),
-                        maxLines = 8,
-                        lineHeight = 26.sp,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.White.copy(alpha = 0.7f),
+                        maxLines = 12,
+                        lineHeight = 22.sp,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
 
-                // Right side: Content Selection
-                Column(modifier = Modifier.weight(2f).fillMaxHeight()) {
-                    // Seasons Selector
-                    val seasons = details.episodes?.keys?.toList() ?: emptyList()
+                // Right side: Title, Selection & Episodes
+                Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                    // Title at the top right
+                    Text(
+                        text = details.info?.name ?: "",
+                        style = MaterialTheme.typography.displayMedium,
+                        color = Color.White,
+                        fontWeight = FontWeight.Black,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
                     
                     Text(
-                        text = stringResource(R.string.categories).uppercase(),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = Turquoise,
-                        letterSpacing = 2.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(bottom = 12.dp)
+                        text = details.info?.genre ?: "",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Color.White.copy(alpha = 0.5f),
+                        modifier = Modifier.padding(bottom = 32.dp)
                     )
 
-                    LazyRow(
+                    // Compact Actions & Seasons Row
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(bottom = 24.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        contentPadding = PaddingValues(vertical = 4.dp)
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        items(seasons) { seasonNum ->
-                            val isSelected = selectedSeason == seasonNum
+                        // Play / Continue Button
+                        val lastEpWatchedBtn = viewModel.lastWatchedEpisode
+                        val firstEpBtn = details.episodes?.values?.firstOrNull()?.firstOrNull()
+                        val targetEpisodeBtn = lastEpWatchedBtn ?: firstEpBtn
+
+                        if (targetEpisodeBtn != null) {
+                            val seasonNum = details.episodes?.entries?.find { it.value.contains(targetEpisodeBtn) }?.key ?: "1"
+                            val epNum = targetEpisodeBtn.episodeNum ?: "1"
+                            val isContinue = lastEpWatchedBtn != null
+
                             Surface(
-                                onClick = { selectedSeason = seasonNum },
+                                onClick = { onPlayEpisode(targetEpisodeBtn) },
+                                modifier = Modifier
+                                    .height(40.dp)
+                                    .focusRequester(continueFocusRequester),
                                 colors = ClickableSurfaceDefaults.colors(
-                                    containerColor = if (isSelected) Turquoise else Color.White.copy(alpha = 0.1f),
-                                    contentColor = if (isSelected) Color.Black else Color.White,
+                                    containerColor = Color.White.copy(alpha = 0.1f),
+                                    contentColor = Color.White,
                                     focusedContainerColor = Color.White,
                                     focusedContentColor = Color.Black
                                 ),
-                                shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(12.dp)),
-                                scale = ClickableSurfaceDefaults.scale(focusedScale = 1.1f)
+                                shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(10.dp)),
+                                scale = ClickableSurfaceDefaults.scale(focusedScale = 1.05f)
                             ) {
-                                Text(
-                                    text = stringResource(R.string.season_label, seasonNum),
-                                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold
-                                )
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 20.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    Icon(
+                                        Icons.Default.PlayArrow, 
+                                        contentDescription = null, 
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = if (isContinue) "FORTSÄTT S$seasonNum:A$epNum"
+                                               else "SPELA S$seasonNum:A$epNum",
+                                        style = MaterialTheme.typography.labelLarge,
+                                        fontWeight = FontWeight.Black,
+                                        letterSpacing = 0.5.sp
+                                    )
+                                }
                             }
                         }
-                    }
 
-                    // Main Action (Continue)
-                    val lastEp = viewModel.lastWatchedEpisode
-                    val firstEp = details.episodes?.values?.firstOrNull()?.firstOrNull()
-                    val targetEpisode = lastEp ?: firstEp
+                        Spacer(modifier = Modifier.width(20.dp))
 
-                    if (targetEpisode != null) {
-                        val seasonNum = details.episodes?.entries?.find { it.value.contains(targetEpisode) }?.key ?: "1"
-                        val epNum = targetEpisode.episodeNum ?: "1"
-                        val isContinue = lastEp != null
-
-                        Surface(
-                            onClick = { onPlayEpisode(targetEpisode) },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 24.dp)
-                                .height(72.dp)
-                                .focusRequester(continueFocusRequester),
-                            colors = ClickableSurfaceDefaults.colors(
-                                containerColor = Turquoise,
-                                contentColor = Color.Black,
-                                focusedContainerColor = Color.White,
-                                focusedContentColor = Color.Black
-                            ),
-                            shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(16.dp)),
-                            scale = ClickableSurfaceDefaults.scale(focusedScale = 1.02f)
+                        // Seasons Selector
+                        val seasons = details.episodes?.keys?.toList() ?: emptyList()
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp)
                         ) {
-                            Row(
-                                modifier = Modifier.fillMaxSize(),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.Center
-                            ) {
-                                Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(36.dp))
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Text(
-                                    text = if (isContinue) stringResource(R.string.continue_watching_label, seasonNum, epNum).uppercase()
-                                           else stringResource(R.string.play_episode_label, seasonNum, epNum).uppercase(),
-                                    style = MaterialTheme.typography.titleLarge,
-                                    fontWeight = FontWeight.Black,
-                                    letterSpacing = 1.sp
-                                )
+                            items(seasons) { seasonNum ->
+                                val isSelected = selectedSeason == seasonNum
+                                Surface(
+                                    onClick = { selectedSeason = seasonNum },
+                                    modifier = Modifier.height(40.dp),
+                                    colors = ClickableSurfaceDefaults.colors(
+                                        containerColor = if (isSelected) Color.White.copy(alpha = 0.2f) else Color.White.copy(alpha = 0.05f),
+                                        contentColor = if (isSelected) Turquoise else Color.White.copy(alpha = 0.6f),
+                                        focusedContainerColor = Color.White,
+                                        focusedContentColor = Color.Black
+                                    ),
+                                    shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(10.dp)),
+                                    scale = ClickableSurfaceDefaults.scale(focusedScale = 1.05f)
+                                ) {
+                                    Box(
+                                        modifier = Modifier.fillMaxHeight().padding(horizontal = 20.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = "SÄSONG $seasonNum",
+                                            style = MaterialTheme.typography.labelLarge,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
 
-                    // Episodes Scrollable List
+                    // Episodes List
                     val episodes = details.episodes?.get(selectedSeason) ?: emptyList()
-                    val initialFocusIndex = remember(episodes, lastEp) {
-                        val idx = episodes.indexOfFirst { it.id == lastEp?.id }
+                    val lastEpWatched = viewModel.lastWatchedEpisode
+                    val initialFocusIndex = remember(episodes, lastEpWatched) {
+                        val idx = episodes.indexOfFirst { it.id == lastEpWatched?.id }
                         if (idx != -1) idx else 0
                     }
 
                     LazyColumn(
                         modifier = Modifier.weight(1f).fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                        contentPadding = PaddingValues(bottom = 40.dp)
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        contentPadding = PaddingValues(bottom = 20.dp)
                     ) {
                         itemsIndexed(episodes) { index, episode ->
-                            val isWatched = lastEp?.id == episode.id
+                            val isWatched = lastEpWatched?.id == episode.id
                             Surface(
                                 onClick = { onPlayEpisode(episode) },
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .then(if (index == initialFocusIndex) Modifier.focusRequester(focusRequester) else Modifier),
                                 colors = ClickableSurfaceDefaults.colors(
-                                    containerColor = Color.White.copy(alpha = 0.05f),
+                                    containerColor = Color.White.copy(alpha = 0.03f),
                                     focusedContainerColor = Color.White,
                                     contentColor = Color.White,
                                     focusedContentColor = Color.Black
                                 ),
-                                shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(16.dp)),
+                                shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(12.dp)),
                                 scale = ClickableSurfaceDefaults.scale(focusedScale = 1.02f)
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(16.dp),
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(52.dp)
-                                            .background(if (isWatched) Turquoise.copy(alpha = 0.2f) else Color.Black.copy(alpha = 0.3f), RoundedCornerShape(12.dp)),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = episode.episodeNum ?: (index + 1).toString(),
-                                            style = MaterialTheme.typography.titleLarge,
-                                            fontWeight = FontWeight.Black,
-                                            color = if (isWatched) Turquoise else Color.White
-                                        )
-                                    }
+                                    Text(
+                                        text = (episode.episodeNum ?: (index + 1).toString()).padStart(2, '0'),
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Black,
+                                        color = if (isWatched) Turquoise else Color.White.copy(alpha = 0.3f),
+                                        modifier = Modifier.width(32.dp)
+                                    )
                                     
-                                    Spacer(modifier = Modifier.width(20.dp))
+                                    Spacer(modifier = Modifier.width(12.dp))
                                     
                                     Column(modifier = Modifier.weight(1f)) {
                                         val epTitle = episode.title ?: stringResource(R.string.episode_label, (index + 1).toString())
                                         Text(
                                             text = epTitle,
-                                            style = MaterialTheme.typography.titleMedium,
+                                            style = MaterialTheme.typography.bodyLarge,
                                             fontWeight = FontWeight.Bold,
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis
@@ -310,7 +337,7 @@ fun SeriesDetailsOverlay(
                                                 text = episode.info!!.plot!!,
                                                 style = MaterialTheme.typography.bodySmall,
                                                 color = if (isWatched) Color.Black.copy(alpha = 0.6f) else Color.Gray,
-                                                maxLines = 2,
+                                                maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis
                                             )
                                         }
@@ -321,7 +348,7 @@ fun SeriesDetailsOverlay(
                                             Icons.Default.CheckCircle,
                                             contentDescription = null,
                                             tint = Turquoise,
-                                            modifier = Modifier.padding(start = 16.dp)
+                                            modifier = Modifier.padding(start = 16.dp).size(20.dp)
                                         )
                                     }
                                 }
