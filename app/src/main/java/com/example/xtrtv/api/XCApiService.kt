@@ -54,6 +54,14 @@ interface XCApiService {
     ): Response<List<VodMovie>>
 
     @GET("player_api.php")
+    suspend fun getVodInfo(
+        @Query("username") user: String,
+        @Query("password") pass: String,
+        @Query("vod_id") vodId: Int,
+        @Query("action") action: String = "get_vod_info"
+    ): Response<VodDetailsResponse>
+
+    @GET("player_api.php")
     suspend fun getSeries(
         @Query("username") user: String,
         @Query("password") pass: String,

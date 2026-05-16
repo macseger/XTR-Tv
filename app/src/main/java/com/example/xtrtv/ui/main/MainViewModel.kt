@@ -118,6 +118,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     var selectedAudioId by mutableStateOf<String?>(null)
         private set
 
+    var currentVodPlot by mutableStateOf<String?>(null)
+    var currentVodGenre by mutableStateOf<String?>(null)
+    var currentVodRating by mutableStateOf<String?>(null)
+    var currentVodReleaseDate by mutableStateOf<String?>(null)
+    private var vodInfoJob: kotlinx.coroutines.Job? = null
+
     var channelEpgList by mutableStateOf<List<EpgEntity>>(emptyList())
     var isFetchingChannelEpg by mutableStateOf(false)
 
@@ -996,6 +1002,35 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 Log.e(TAG, "Error fetching series", e)
             } finally {
                 isLoading = false
+            }
+        }
+    }
+
+    fun loadVodInfo(movie: VodMovie) {
+        currentVodPlot = movie.plot
+        currentVodGenre = movie.genre
+        currentVodRating = movie.rating
+        currentVodReleaseDate = movie.releaseDate
+        
+        if (movie.plot != null && movie.genre != null) return
+        
+        val data = userData ?: return
+        vodInfoJob?.cancel()
+        vodInfoJob = viewModelScope.launch {
+            try {
+                val apiService = ApiClient.createService(data.url)
+                val response = apiService.getVodInfo(data.username, data.password, movie.streamId)
+                if (response.isSuccessful) {
+                    val info = response.body()?.info
+                    if (info != null) {
+                        currentVodPlot = info.plot ?: currentVodPlot
+                        currentVodGenre = info.genre ?: currentVodGenre
+                        currentVodRating = info.rating ?: currentVodRating
+                        currentVodReleaseDate = info.releaseDate ?: currentVodReleaseDate
+                    }
+                }
+            } catch (e: Exception) {
+                // Ignore
             }
         }
     }

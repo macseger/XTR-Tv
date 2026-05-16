@@ -69,6 +69,21 @@ data class SeriesDetailsResponse(
     val episodes: Map<String, List<Episode>>?
 )
 
+data class VodDetailsResponse(
+    val info: VodInfo?
+)
+
+data class VodInfo(
+    val name: String?,
+    @SerializedName("movie_image") val movieImage: String?,
+    val genre: String?,
+    val plot: String?,
+    val cast: String?,
+    val director: String?,
+    val releaseDate: String?,
+    val rating: String?
+)
+
 data class SeriesInfo(
     val name: String?,
     val cover: String?,

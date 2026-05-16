@@ -777,7 +777,7 @@ fun MainScreen(
                                             )
                                         }
                                     } else {
-                                        val rating = if (viewModel.currentMode == MainViewModel.AppMode.VOD) focusedMovie?.rating else focusedSeries?.rating
+                                        val rating = if (viewModel.currentMode == MainViewModel.AppMode.VOD) viewModel.currentVodRating ?: focusedMovie?.rating else focusedSeries?.rating
                                         if (!rating.isNullOrBlank() && rating != "0") {
                                             Icon(Icons.Default.Star, null, tint = Color(0xFFFFD700), modifier = Modifier.size(18.dp))
                                             Spacer(modifier = Modifier.width(4.dp))
@@ -785,7 +785,7 @@ fun MainScreen(
                                             Spacer(modifier = Modifier.width(20.dp))
                                         }
 
-                                        val genre = if (viewModel.currentMode == MainViewModel.AppMode.VOD) focusedMovie?.genre else focusedSeries?.genre
+                                        val genre = if (viewModel.currentMode == MainViewModel.AppMode.VOD) viewModel.currentVodGenre ?: focusedMovie?.genre else focusedSeries?.genre
                                         Text(
                                             text = (genre ?: if (viewModel.currentMode == MainViewModel.AppMode.VOD) "FILM" else "SERIE").uppercase(),
                                             color = Color.Gray,
@@ -793,7 +793,7 @@ fun MainScreen(
                                             letterSpacing = 1.sp
                                         )
 
-                                        val releaseDate = if (viewModel.currentMode == MainViewModel.AppMode.VOD) focusedMovie?.releaseDate else focusedSeries?.releaseDate
+                                        val releaseDate = if (viewModel.currentMode == MainViewModel.AppMode.VOD) viewModel.currentVodReleaseDate ?: focusedMovie?.releaseDate else focusedSeries?.releaseDate
                                         if (!releaseDate.isNullOrBlank()) {
                                             Spacer(modifier = Modifier.width(20.dp))
                                             Text(releaseDate, color = Color.Gray, style = MaterialTheme.typography.labelLarge)
@@ -816,7 +816,7 @@ fun MainScreen(
                                 // 3. Handling / Plot (The core request)
                                 val plot = when (viewModel.currentMode) {
                                     MainViewModel.AppMode.LIVE -> viewModel.epgMap[focusedChannel?.streamId]?.description
-                                    MainViewModel.AppMode.VOD -> focusedMovie?.plot
+                                    MainViewModel.AppMode.VOD -> viewModel.currentVodPlot ?: focusedMovie?.plot
                                     MainViewModel.AppMode.SERIES -> focusedSeries?.plot
                                 } ?: ""
 
@@ -987,7 +987,12 @@ fun MainScreen(
                                                 posterUrl = movie.streamIcon,
                                                 rating = movie.rating,
                                                 modifier = Modifier
-                                                    .onFocusChanged { if (it.isFocused) focusedMovie = movie }
+                                                    .onFocusChanged { 
+                                                        if (it.isFocused) {
+                                                            focusedMovie = movie 
+                                                            viewModel.loadVodInfo(movie)
+                                                        }
+                                                    }
                                                     .then(if (index == 0) Modifier.focusRequester(contentFocusRequester) else Modifier),
                                                 onClick = { 
                                                     showPlaybackControls = false
