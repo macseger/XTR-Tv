@@ -3,6 +3,7 @@ package com.example.xtrtv.ui.login
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedTextField
@@ -12,6 +13,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -32,6 +35,9 @@ fun LoginScreen(
     onLoginSuccess: (UserData) -> Unit,
     viewModel: LoginViewModel = viewModel()
 ) {
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
+
     LaunchedEffect(Unit) {
         viewModel.loginSuccess.collect { userData ->
             onLoginSuccess(userData)
@@ -115,6 +121,13 @@ fun LoginScreen(
                     autoCorrectEnabled = false,
                     imeAction = ImeAction.Done
                 ),
+                keyboardActions = KeyboardActions(
+                    onDone = {
+                        keyboardController?.hide()
+                        focusManager.clearFocus()
+                        viewModel.login()
+                    }
+                ),
                 modifier = Modifier.width(400.dp),
                 colors = textFieldColors,
                 singleLine = true
@@ -125,7 +138,11 @@ fun LoginScreen(
                 CircularProgressIndicator(color = Turquoise)
             } else {
                 Button(
-                    onClick = { viewModel.login() },
+                    onClick = { 
+                        keyboardController?.hide()
+                        focusManager.clearFocus()
+                        viewModel.login() 
+                    },
                     modifier = Modifier.width(200.dp),
                     colors = ButtonDefaults.colors(
                         containerColor = Color.White.copy(alpha = 0.1f),
