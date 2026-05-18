@@ -63,6 +63,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     
     var epgMap by mutableStateOf<Map<Int, EpgEntity>>(emptyMap())
         private set
+    var nextEpgMap by mutableStateOf<Map<Int, EpgEntity>>(emptyMap())
+        private set
     var lastEpgUpdate by mutableStateOf<Long?>(null)
         private set
 
@@ -613,34 +615,54 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 allCandidateIds.addAll(uniqueCandidates)
             }
 
-            // 2. Fetch all current programs for these IDs in one batch
+            // 2. Fetch all upcoming programs for these IDs
             val programs = if (allCandidateIds.isNotEmpty()) {
                 withContext(Dispatchers.IO) {
-                    dao.getCurrentEpgForChannels(allCandidateIds.toList(), currentTimeMs)
+                    dao.getUpcomingEpgForChannels(allCandidateIds.toList(), currentTimeMs)
                 }
             } else {
                 emptyList()
             }
             
-            // Group by channelId as there might be multiple (though getCurrentEpgForChannels filters by time)
-            val programLookup = programs.associateBy { it.channelId }
+            // Group by channelId and take Current and Next
+            val groupedPrograms = programs.groupBy { it.channelId }
+            val currentProgramLookup = mutableMapOf<String, EpgEntity>()
+            val nextProgramLookup = mutableMapOf<String, EpgEntity>()
+
+            groupedPrograms.forEach { (channelId, channelPrograms) ->
+                val current = channelPrograms.find { it.start <= currentTimeMs && it.stop >= currentTimeMs }
+                val next = if (current != null) {
+                    channelPrograms.find { it.start >= current.stop }
+                } else {
+                    channelPrograms.firstOrNull()
+                }
+                
+                if (current != null) currentProgramLookup[channelId] = current
+                if (next != null) nextProgramLookup[channelId] = next
+            }
 
             // 3. Map programs back to channels based on priority
             val newEpgMap = mutableMapOf<Int, EpgEntity>()
+            val newNextEpgMap = mutableMapOf<Int, EpgEntity>()
             currentChannels.forEach { stream ->
                 val candidates = channelCandidatesMap[stream.streamId] ?: emptyList()
                 for (id in candidates) {
-                    val match = programLookup[id]
-                    if (match != null) {
-                        newEpgMap[stream.streamId] = match
-                        break
+                    val currentMatch = currentProgramLookup[id]
+                    if (currentMatch != null) {
+                        newEpgMap[stream.streamId] = currentMatch
                     }
+                    val nextMatch = nextProgramLookup[id]
+                    if (nextMatch != null) {
+                        newNextEpgMap[stream.streamId] = nextMatch
+                    }
+                    if (currentMatch != null || nextMatch != null) break
                 }
             }
             
             withContext(Dispatchers.Main) {
                 epgMap = newEpgMap
-                Log.i(TAG, "EPG Map updated: ${newEpgMap.size} matches found out of ${currentChannels.size} channels")
+                nextEpgMap = newNextEpgMap
+                Log.i(TAG, "EPG Map updated: ${newEpgMap.size} current, ${newNextEpgMap.size} next matches found")
             }
         } finally {
             isMappingEpg = false

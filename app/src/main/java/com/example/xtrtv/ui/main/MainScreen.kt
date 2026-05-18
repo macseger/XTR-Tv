@@ -727,8 +727,8 @@ fun MainScreen(
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(280.dp)
-                                .padding(horizontal = 32.dp, vertical = 20.dp)
+                                .height(160.dp)
+                                .padding(horizontal = 32.dp, vertical = 12.dp)
                         ) {
                             Column(modifier = Modifier.align(Alignment.BottomStart)) {
                                 val itemTitle = when (viewModel.currentMode) {
@@ -753,86 +753,93 @@ fun MainScreen(
                                 Spacer(modifier = Modifier.height(6.dp))
 
                                 // 2. Meta Info Row (Rating, Genre, Release Date or EPG Title/Time)
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.padding(bottom = 12.dp)
-                                ) {
+                                Column(modifier = Modifier.padding(bottom = 12.dp)) {
                                     if (viewModel.currentMode == MainViewModel.AppMode.LIVE) {
                                         val epg = viewModel.epgMap[focusedChannel?.streamId]
+                                        val nextEpg = viewModel.nextEpgMap[focusedChannel?.streamId]
+                                        val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
+
                                         if (epg != null) {
-                                            val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
-                                            Text(
-                                                text = "${timeFormat.format(Date(epg.start))} - ${timeFormat.format(Date(epg.stop))}",
-                                                color = Turquoise,
-                                                style = MaterialTheme.typography.titleMedium,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                            Spacer(modifier = Modifier.width(20.dp))
-                                            Text(
-                                                text = epg.title,
-                                                color = Color.White.copy(alpha = 0.9f),
-                                                style = MaterialTheme.typography.titleMedium,
-                                                fontWeight = FontWeight.Bold,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                        }
-                                    } else {
-                                        val rating = if (viewModel.currentMode == MainViewModel.AppMode.VOD) viewModel.currentVodRating ?: focusedMovie?.rating else focusedSeries?.rating
-                                        if (!rating.isNullOrBlank() && rating != "0") {
-                                            Icon(Icons.Default.Star, null, tint = Color(0xFFFFD700), modifier = Modifier.size(18.dp))
-                                            Spacer(modifier = Modifier.width(4.dp))
-                                            Text(rating, color = Color(0xFFFFD700), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                                            Spacer(modifier = Modifier.width(20.dp))
-                                        }
-
-                                        val genre = if (viewModel.currentMode == MainViewModel.AppMode.VOD) viewModel.currentVodGenre ?: focusedMovie?.genre else focusedSeries?.genre
-                                        Text(
-                                            text = (genre ?: if (viewModel.currentMode == MainViewModel.AppMode.VOD) "FILM" else "SERIE").uppercase(),
-                                            color = Color.Gray,
-                                            style = MaterialTheme.typography.labelLarge,
-                                            letterSpacing = 1.sp
-                                        )
-
-                                        val releaseDate = if (viewModel.currentMode == MainViewModel.AppMode.VOD) viewModel.currentVodReleaseDate ?: focusedMovie?.releaseDate else focusedSeries?.releaseDate
-                                        if (!releaseDate.isNullOrBlank()) {
-                                            Spacer(modifier = Modifier.width(20.dp))
-                                            Text(releaseDate, color = Color.Gray, style = MaterialTheme.typography.labelLarge)
-                                        }
-                                        
-                                        if (viewModel.currentMode == MainViewModel.AppMode.VOD) {
-                                            focusedMovie?.containerExtension?.let {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Text(
+                                                    text = "${timeFormat.format(Date(epg.start))} - ${timeFormat.format(Date(epg.stop))}",
+                                                    color = Turquoise,
+                                                    style = MaterialTheme.typography.titleMedium,
+                                                    fontWeight = FontWeight.Bold
+                                                )
                                                 Spacer(modifier = Modifier.width(20.dp))
                                                 Text(
-                                                    text = it.uppercase(),
-                                                    modifier = Modifier.background(Color.DarkGray.copy(alpha = 0.6f), RoundedCornerShape(4.dp)).padding(horizontal = 6.dp, vertical = 2.dp),
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = Color.White
+                                                    text = epg.title,
+                                                    color = Color.White.copy(alpha = 0.9f),
+                                                    style = MaterialTheme.typography.titleMedium,
+                                                    fontWeight = FontWeight.Bold,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
                                                 )
+                                            }
+                                        }
+                                        
+                                        if (nextEpg != null) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                modifier = Modifier.padding(top = 4.dp)
+                                            ) {
+                                                Text(
+                                                    text = "${stringResource(R.string.next_label)}: ${timeFormat.format(Date(nextEpg.start))} - ${timeFormat.format(Date(nextEpg.stop))}",
+                                                    color = Color.Gray,
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                                Spacer(modifier = Modifier.width(20.dp))
+                                                Text(
+                                                    text = nextEpg.title,
+                                                    color = Color.Gray.copy(alpha = 0.8f),
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                            }
+                                        }
+                                    } else {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            val rating = if (viewModel.currentMode == MainViewModel.AppMode.VOD) viewModel.currentVodRating ?: focusedMovie?.rating else focusedSeries?.rating
+                                            if (!rating.isNullOrBlank() && rating != "0") {
+                                                Icon(Icons.Default.Star, null, tint = Color(0xFFFFD700), modifier = Modifier.size(18.dp))
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Text(rating, color = Color(0xFFFFD700), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                                Spacer(modifier = Modifier.width(20.dp))
+                                            }
+
+                                            val genre = if (viewModel.currentMode == MainViewModel.AppMode.VOD) viewModel.currentVodGenre ?: focusedMovie?.genre else focusedSeries?.genre
+                                            Text(
+                                                text = (genre ?: if (viewModel.currentMode == MainViewModel.AppMode.VOD) "FILM" else "SERIE").uppercase(),
+                                                color = Color.Gray,
+                                                style = MaterialTheme.typography.labelLarge,
+                                                letterSpacing = 1.sp
+                                            )
+
+                                            val releaseDate = if (viewModel.currentMode == MainViewModel.AppMode.VOD) viewModel.currentVodReleaseDate ?: focusedMovie?.releaseDate else focusedSeries?.releaseDate
+                                            if (!releaseDate.isNullOrBlank()) {
+                                                Spacer(modifier = Modifier.width(20.dp))
+                                                Text(releaseDate, color = Color.Gray, style = MaterialTheme.typography.labelLarge)
+                                            }
+                                            
+                                            if (viewModel.currentMode == MainViewModel.AppMode.VOD) {
+                                                focusedMovie?.containerExtension?.let {
+                                                    Spacer(modifier = Modifier.width(20.dp))
+                                                    Text(
+                                                        text = it.uppercase(),
+                                                        modifier = Modifier.background(Color.DarkGray.copy(alpha = 0.6f), RoundedCornerShape(4.dp)).padding(horizontal = 6.dp, vertical = 2.dp),
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = Color.White
+                                                    )
+                                                }
                                             }
                                         }
                                     }
                                 }
 
-                                // 3. Handling / Plot (The core request)
-                                val plot = when (viewModel.currentMode) {
-                                    MainViewModel.AppMode.LIVE -> viewModel.epgMap[focusedChannel?.streamId]?.description
-                                    MainViewModel.AppMode.VOD -> viewModel.currentVodPlot ?: focusedMovie?.plot
-                                    MainViewModel.AppMode.SERIES -> focusedSeries?.plot
-                                } ?: ""
-
-                                if (plot.isNotEmpty()) {
-                                    Text(
-                                        text = plot,
-                                        style = MaterialTheme.typography.bodyLarge.copy(
-                                            lineHeight = 22.sp,
-                                            color = Color.White.copy(alpha = 0.8f)
-                                        ),
-                                        maxLines = 5,
-                                        overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier.fillMaxWidth(0.75f)
-                                    )
-                                }
+                                /* EPG Plot removed to save space as requested */
                             }
                             
                             Box(modifier = Modifier.align(Alignment.TopEnd)) {
@@ -854,6 +861,7 @@ fun MainScreen(
                                 ) { index, stream ->
                                     val isPlaying = viewModel.currentChannel?.streamId == stream.streamId
                                     val epgEntry = viewModel.epgMap[stream.streamId]
+                                    val nextEpg = viewModel.nextEpgMap[stream.streamId]
 
                                     Surface(
                                         onClick = { 
@@ -864,7 +872,7 @@ fun MainScreen(
                                         },
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .padding(vertical = 4.dp)
+                                            .padding(vertical = 2.dp)
                                             .onFocusChanged { if (it.isFocused) focusedChannel = stream }
                                             .then(
                                                 if (focusPlayingNow && playingIndex >= 0) {
@@ -879,11 +887,11 @@ fun MainScreen(
                                             contentColor = if (isPlaying) Turquoise else Color.White,
                                             focusedContentColor = Color.Black
                                         ),
-                                        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(12.dp)),
+                                        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(8.dp)),
                                         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.02f)
                                     ) {
                                         Row(
-                                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp).fillMaxWidth(),
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp).fillMaxWidth(),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             val context = LocalContext.current
@@ -905,18 +913,18 @@ fun MainScreen(
                                                     .build(),
                                                 contentDescription = null,
                                                 modifier = Modifier
-                                                    .width(85.dp)
-                                                    .height(48.dp)
-                                                    .background(Color.Black.copy(alpha = 0.2f), RoundedCornerShape(8.dp)),
+                                                    .width(60.dp)
+                                                    .height(34.dp)
+                                                    .background(Color.Black.copy(alpha = 0.2f), RoundedCornerShape(4.dp)),
                                                 contentScale = androidx.compose.ui.layout.ContentScale.Fit
                                             )
 
-                                            Spacer(modifier = Modifier.width(16.dp))
+                                            Spacer(modifier = Modifier.width(12.dp))
 
-                                            Column(modifier = Modifier.weight(1.5f)) {
+                                            Column(modifier = Modifier.weight(1f)) {
                                                 Text(
                                                     text = stream.name,
-                                                    style = MaterialTheme.typography.titleMedium,
+                                                    style = MaterialTheme.typography.titleMedium.copy(fontSize = 16.sp),
                                                     maxLines = 1,
                                                     overflow = TextOverflow.Ellipsis,
                                                     fontWeight = FontWeight.Bold
@@ -924,7 +932,7 @@ fun MainScreen(
                                                 if (epgEntry != null) {
                                                     Text(
                                                         text = epgEntry.title,
-                                                        style = MaterialTheme.typography.bodyMedium,
+                                                        style = MaterialTheme.typography.bodySmall,
                                                         maxLines = 1,
                                                         overflow = TextOverflow.Ellipsis,
                                                         color = if (isPlaying) Turquoise else LocalContentColor.current.copy(alpha = 0.7f)
@@ -934,7 +942,7 @@ fun MainScreen(
 
                                             if (epgEntry != null) {
                                                 Column(
-                                                    modifier = Modifier.weight(1f),
+                                                    modifier = Modifier.width(100.dp),
                                                     horizontalAlignment = Alignment.End
                                                 ) {
                                                     val timeRange = remember(epgEntry) {
@@ -942,10 +950,10 @@ fun MainScreen(
                                                     }
                                                     Text(
                                                         text = timeRange,
-                                                        style = MaterialTheme.typography.labelMedium,
+                                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
                                                         color = LocalContentColor.current.copy(alpha = 0.5f)
                                                     )
-                                                    Spacer(modifier = Modifier.height(4.dp))
+                                                    Spacer(modifier = Modifier.height(2.dp))
                                                     EpgProgressBar(
                                                         start = epgEntry.start,
                                                         stop = epgEntry.stop,

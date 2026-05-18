@@ -71,4 +71,5 @@
     <string name="no_epg_info">Ingen programinformation tillgänglig</string>
     <string name="recent_channels">SENASTE KANALER</string>
     <string name="no_history">Ingen historik än</string>
+    <string name="next_label">Nästa</string>
 </resources>
