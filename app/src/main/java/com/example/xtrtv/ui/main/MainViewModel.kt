@@ -61,6 +61,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     var lastWatchedEpisode by mutableStateOf<com.example.xtrtv.api.Episode?>(null)
     var isSeriesLoading by mutableStateOf(false)
     
+    // Movie details
+    var selectedMovieHistory by mutableStateOf<PlaybackHistoryEntity?>(null)
+    
     var epgMap by mutableStateOf<Map<Int, EpgEntity>>(emptyMap())
         private set
     var nextEpgMap by mutableStateOf<Map<Int, EpgEntity>>(emptyMap())
@@ -1034,6 +1037,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         currentVodRating = movie.rating
         currentVodReleaseDate = movie.releaseDate
         
+        viewModelScope.launch {
+            selectedMovieHistory = withContext(Dispatchers.IO) {
+                dao.getHistoryById(movie.streamId)
+            }
+        }
+
         if (movie.plot != null && movie.genre != null) return
         
         val data = userData ?: return
@@ -1058,7 +1067,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     @OptIn(UnstableApi::class)
-    fun playVod(movie: VodMovie, fromStart: Boolean = false) {
+    fun playVod(movie: VodMovie, fromStart: Boolean = false, skipResumeDialog: Boolean = false) {
         val data = userData ?: return
         pendingMovie = movie
         activePlaybackMode = AppMode.VOD // Set active playback mode
@@ -1072,7 +1081,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             
             val history = withContext(Dispatchers.IO) { dao.getHistoryById(movie.streamId) }
             
-            if (history != null && history.position > 15_000 && !fromStart && !showResumeDialog) {
+            if (!skipResumeDialog && history != null && history.position > 15_000 && !fromStart && !showResumeDialog) {
                 savedPosition = history.position
                 showResumeDialog = true
                 return@launch

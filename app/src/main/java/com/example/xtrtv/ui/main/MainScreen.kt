@@ -85,6 +85,7 @@ fun MainScreen(
 ) {
     val context = LocalContext.current
     var showChannelList by remember { mutableStateOf(false) }
+    var showMovieDetails by remember { mutableStateOf(false) }
     var showContextMenu by remember { mutableStateOf(false) }
     var showSubtitleMenu by remember { mutableStateOf(false) }
     var showAudioMenu by remember { mutableStateOf(false) }
@@ -107,7 +108,7 @@ fun MainScreen(
     var focusedSeries by remember { mutableStateOf<Series?>(null) }
     val isAnyOverlayVisible by remember {
         derivedStateOf {
-            showChannelList || showContextMenu || showPlaybackControls || 
+            showChannelList || showMovieDetails || showContextMenu || showPlaybackControls || 
             showSeriesDetails || showSearchOverlay || showExitDialog || 
             showLogoutDialog || showUrlDialog || viewModel.showResumeDialog ||
             showAudioMenu || viewModel.showNextEpisodeDialog || showRecentChannels ||
@@ -269,8 +270,9 @@ fun MainScreen(
 
     BackHandler(enabled = true) {
         // REGEL 1: Om någon meny/overlay är öppen -> Stäng ALLT direkt
-        if (showChannelList || showContextMenu || showSeriesDetails || showSearchOverlay || showPlaybackControls || showRecentChannels || showChannelEpg) {
+        if (showChannelList || showMovieDetails || showContextMenu || showSeriesDetails || showSearchOverlay || showPlaybackControls || showRecentChannels || showChannelEpg) {
             showChannelList = false
+            showMovieDetails = false
             showContextMenu = false
             showSubtitleMenu = false
             showAudioMenu = false
@@ -318,6 +320,7 @@ fun MainScreen(
                     if (isAnyOverlayVisible) {
                         if (event.type == KeyEventType.KeyUp) {
                             showChannelList = false
+                            showMovieDetails = false
                             showContextMenu = false
                             showSubtitleMenu = false
                             showAudioMenu = false
@@ -1004,9 +1007,8 @@ fun MainScreen(
                                                     }
                                                     .then(if (index == 0) Modifier.focusRequester(contentFocusRequester) else Modifier),
                                                 onClick = { 
-                                                    showPlaybackControls = false
-                                                    viewModel.playVod(movie)
-                                                    showChannelList = false
+                                                    viewModel.loadVodInfo(movie)
+                                                    showMovieDetails = true
                                                 }
                                             )
                                         }
@@ -1039,6 +1041,20 @@ fun MainScreen(
         }
 
         // Overlays
+        if (showMovieDetails && focusedMovie != null) {
+            MovieDetailsOverlay(
+                movie = focusedMovie!!,
+                viewModel = viewModel,
+                onClose = { showMovieDetails = false },
+                onPlay = { resume ->
+                    showPlaybackControls = false
+                    viewModel.playVod(focusedMovie!!, fromStart = !resume, skipResumeDialog = true)
+                    showMovieDetails = false
+                    showChannelList = false
+                }
+            )
+        }
+
         if (showSeriesDetails) {
             SeriesDetailsOverlay(
                 viewModel = viewModel,
@@ -1057,10 +1073,10 @@ fun MainScreen(
                 viewModel = viewModel,
                 onClose = { showSearchOverlay = false },
                 onPlayVod = { movie ->
-                    showPlaybackControls = false
-                    viewModel.playVod(movie)
+                    focusedMovie = movie
+                    viewModel.loadVodInfo(movie)
+                    showMovieDetails = true
                     showSearchOverlay = false
-                    showChannelList = false
                 },
                 onOpenSeries = { series ->
                     viewModel.loadSeriesDetails(series)
