@@ -72,4 +72,6 @@
     <string name="recent_channels">SENASTE KANALER</string>
     <string name="no_history">Ingen historik än</string>
     <string name="next_label">Nästa</string>
+    <string name="about_app">Om denna applikation</string>
+    <string name="about_app_desc">Denna applikation är helt gratis, reklamfri och får användas för personligt bruk. Dock tar jag gärna emot gåvor. Du kan kontakta mig på marcus.segerljung@gmail.com eller swisha en liten gåva på 0790-16 15 14 Med vänliga hälsningar/ Marcus. Klicka bakåt för att stänga denna ruta.</string>
 </resources>

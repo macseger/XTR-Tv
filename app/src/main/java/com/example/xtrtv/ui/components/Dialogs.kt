@@ -1,8 +1,10 @@
 package com.example.xtrtv.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -14,12 +16,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.tv.material3.*
 import com.example.xtrtv.R
 import com.example.xtrtv.ui.theme.Turquoise
@@ -392,7 +393,7 @@ fun NextEpisodeDialog(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Icon(
-                imageVector = androidx.compose.material.icons.Icons.Default.SkipNext,
+                imageVector = Icons.Default.SkipNext,
                 contentDescription = null,
                 tint = Turquoise,
                 modifier = Modifier.size(48.dp)
@@ -564,5 +565,68 @@ fun CustomEpgDialog(
                 focusRequester.requestFocus()
             }
         }
+    }
+}
+
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+fun AboutAppDialog(
+    onDismiss: () -> Unit
+) {
+    val focusRequester = remember { FocusRequester() }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.9f))
+            .clickable { onDismiss() },
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            modifier = Modifier
+                .width(500.dp)
+                .background(Color(0xFF1A1A1A), RoundedCornerShape(24.dp))
+                .padding(32.dp)
+                .clickable(enabled = false) {},
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = stringResource(R.string.about_app),
+                style = MaterialTheme.typography.headlineSmall,
+                color = Turquoise,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+            Text(
+                text = stringResource(R.string.about_app_desc),
+                style = MaterialTheme.typography.bodyLarge,
+                color = Color.White,
+                textAlign = TextAlign.Center,
+                lineHeight = 26.sp
+            )
+            Spacer(modifier = Modifier.height(32.dp))
+            Surface(
+                onClick = onDismiss,
+                modifier = Modifier.focusRequester(focusRequester),
+                colors = ClickableSurfaceDefaults.colors(
+                    containerColor = Turquoise,
+                    contentColor = Color.Black,
+                    focusedContainerColor = Color.White,
+                    focusedContentColor = Color.Black
+                ),
+                shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(12.dp))
+            ) {
+                Text(
+                    text = stringResource(R.string.close),
+                    modifier = Modifier.padding(horizontal = 32.dp, vertical = 12.dp),
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
     }
 }

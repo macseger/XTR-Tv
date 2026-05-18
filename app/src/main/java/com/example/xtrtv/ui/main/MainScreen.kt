@@ -96,6 +96,7 @@ fun MainScreen(
     var showLogoutDialog by remember { mutableStateOf(false) }
     var showUrlDialog by remember { mutableStateOf(false) }
     var showCustomEpgDialog by remember { mutableStateOf(false) }
+    var showAboutDialog by remember { mutableStateOf(false) }
     var showRecentChannels by remember { mutableStateOf(false) }
     var showChannelEpg by remember { mutableStateOf(false) }
     var lastInteractionTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -112,7 +113,7 @@ fun MainScreen(
             showSeriesDetails || showSearchOverlay || showExitDialog || 
             showLogoutDialog || showUrlDialog || viewModel.showResumeDialog ||
             showAudioMenu || viewModel.showNextEpisodeDialog || showRecentChannels ||
-            showChannelEpg
+            showChannelEpg || showAboutDialog
         }
     }
     
@@ -277,6 +278,11 @@ fun MainScreen(
             return@BackHandler
         }
 
+        if (showAboutDialog) {
+            showAboutDialog = false
+            return@BackHandler
+        }
+
         // För övriga menyer (inkl. kanallistan) -> Stäng ALLT direkt
         if (showChannelList || showContextMenu || showPlaybackControls || showRecentChannels || showChannelEpg) {
             showChannelList = false
@@ -331,6 +337,8 @@ fun MainScreen(
                                 showSeriesDetails = false
                             } else if (showSearchOverlay) {
                                 showSearchOverlay = false
+                            } else if (showAboutDialog) {
+                                showAboutDialog = false
                             } else {
                                 showChannelList = false
                                 showContextMenu = false
@@ -1318,6 +1326,16 @@ fun MainScreen(
                             }
                             item {
                                 ContextMenuItem(
+                                    text = stringResource(R.string.about_app),
+                                    icon = { Icon(Icons.Default.Info, null, modifier = Modifier.size(20.dp)) },
+                                    onClick = {
+                                        showAboutDialog = true
+                                        showContextMenu = false
+                                    }
+                                )
+                            }
+                            item {
+                                ContextMenuItem(
                                     text = stringResource(R.string.logout),
                                     icon = { Icon(Icons.AutoMirrored.Filled.Logout, null, modifier = Modifier.size(20.dp)) },
                                     onClick = {
@@ -1431,6 +1449,13 @@ fun MainScreen(
                 onDismiss = { showCustomEpgDialog = false }
             )
         }
+
+        if (showAboutDialog) {
+            AboutAppDialog(
+                onDismiss = { showAboutDialog = false }
+            )
+        }
+
         if (showRecentChannels) {
             RecentChannelsOverlay(
                 channels = viewModel.recentChannels,
