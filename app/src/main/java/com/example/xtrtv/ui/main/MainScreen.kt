@@ -190,8 +190,8 @@ fun MainScreen(
         }
     }
 
-    LaunchedEffect(showSeriesDetails, showSearchOverlay) {
-        if (!showSeriesDetails && !showSearchOverlay && showChannelList) {
+    LaunchedEffect(showMovieDetails, showSeriesDetails, showSearchOverlay) {
+        if (!showMovieDetails && !showSeriesDetails && !showSearchOverlay && showChannelList) {
             try {
                 contentFocusRequester.requestFocus()
             } catch (e: Exception) {
@@ -269,10 +269,21 @@ fun MainScreen(
     }
 
     BackHandler(enabled = true) {
-        // REGEL 1: Om någon meny/overlay är öppen -> Stäng ALLT direkt
-        if (showChannelList || showMovieDetails || showContextMenu || showSeriesDetails || showSearchOverlay || showPlaybackControls || showRecentChannels || showChannelEpg) {
-            showChannelList = false
+        // Om detaljvyer är öppna -> Stäng bara dem för att återgå till listan
+        if (showMovieDetails || showSeriesDetails) {
             showMovieDetails = false
+            showSeriesDetails = false
+            return@BackHandler
+        }
+
+        if (showSearchOverlay) {
+            showSearchOverlay = false
+            return@BackHandler
+        }
+
+        // För övriga menyer (inkl. kanallistan) -> Stäng ALLT direkt
+        if (showChannelList || showContextMenu || showPlaybackControls || showRecentChannels || showChannelEpg) {
+            showChannelList = false
             showContextMenu = false
             showSubtitleMenu = false
             showAudioMenu = false
@@ -319,21 +330,27 @@ fun MainScreen(
                 if (event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_BACK) {
                     if (isAnyOverlayVisible) {
                         if (event.type == KeyEventType.KeyUp) {
-                            showChannelList = false
-                            showMovieDetails = false
-                            showContextMenu = false
-                            showSubtitleMenu = false
-                            showAudioMenu = false
-                            showSeriesDetails = false
-                            showSearchOverlay = false
-                            showPlaybackControls = false
-                            showRecentChannels = false
-                            showChannelEpg = false
-                            showUrlDialog = false
-                            showLogoutDialog = false
-                            showExitDialog = false
-                            viewModel.showResumeDialog = false
-                            viewModel.showNextEpisodeDialog = false
+                            if (showMovieDetails || showSeriesDetails) {
+                                showMovieDetails = false
+                                showSeriesDetails = false
+                            } else if (showSearchOverlay) {
+                                showSearchOverlay = false
+                            } else {
+                                showChannelList = false
+                                showContextMenu = false
+                                showSubtitleMenu = false
+                                showAudioMenu = false
+                                showSeriesDetails = false
+                                showSearchOverlay = false
+                                showPlaybackControls = false
+                                showRecentChannels = false
+                                showChannelEpg = false
+                                showUrlDialog = false
+                                showLogoutDialog = false
+                                showExitDialog = false
+                                viewModel.showResumeDialog = false
+                                viewModel.showNextEpisodeDialog = false
+                            }
                         }
                         return@onKeyEvent true
                     } else if (viewModel.activePlaybackMode != MainViewModel.AppMode.LIVE) {
@@ -865,6 +882,7 @@ fun MainScreen(
                                     val isPlaying = viewModel.currentChannel?.streamId == stream.streamId
                                     val epgEntry = viewModel.epgMap[stream.streamId]
                                     val nextEpg = viewModel.nextEpgMap[stream.streamId]
+                                    val isFocusedTarget = remember(focusedChannel, stream) { focusedChannel?.streamId == stream.streamId }
 
                                     Surface(
                                         onClick = { 
@@ -878,11 +896,9 @@ fun MainScreen(
                                             .padding(vertical = 2.dp)
                                             .onFocusChanged { if (it.isFocused) focusedChannel = stream }
                                             .then(
-                                                if (focusPlayingNow && playingIndex >= 0) {
-                                                    if (index == playingIndex) Modifier.focusRequester(contentFocusRequester) else Modifier
-                                                } else {
-                                                    if (index == 0) Modifier.focusRequester(contentFocusRequester) else Modifier
-                                                }
+                                                if (isFocusedTarget || (focusedChannel == null && (if (focusPlayingNow && playingIndex >= 0) index == playingIndex else index == 0))) {
+                                                    Modifier.focusRequester(contentFocusRequester)
+                                                } else Modifier
                                             ),
                                         colors = ClickableSurfaceDefaults.colors(
                                             containerColor = if (isPlaying) Turquoise.copy(alpha = 0.05f) else Color.Transparent,
@@ -994,6 +1010,7 @@ fun MainScreen(
                                             key = { _, movie -> movie.streamId },
                                             contentType = { _, _ -> "movie" }
                                         ) { index, movie ->
+                                            val isFocusedTarget = remember(focusedMovie, movie) { focusedMovie?.streamId == movie.streamId }
                                             VodCard(
                                                 title = movie.name,
                                                 posterUrl = movie.streamIcon,
@@ -1005,7 +1022,7 @@ fun MainScreen(
                                                             viewModel.loadVodInfo(movie)
                                                         }
                                                     }
-                                                    .then(if (index == 0) Modifier.focusRequester(contentFocusRequester) else Modifier),
+                                                    .then(if (isFocusedTarget || (focusedMovie == null && index == 0)) Modifier.focusRequester(contentFocusRequester) else Modifier),
                                                 onClick = { 
                                                     viewModel.loadVodInfo(movie)
                                                     showMovieDetails = true
@@ -1018,13 +1035,14 @@ fun MainScreen(
                                             key = { _, series -> series.seriesId },
                                             contentType = { _, _ -> "series" }
                                         ) { index, series ->
+                                            val isFocusedTarget = remember(focusedSeries, series) { focusedSeries?.seriesId == series.seriesId }
                                             VodCard(
                                                 title = series.name,
                                                 posterUrl = series.cover,
                                                 rating = series.rating,
                                                 modifier = Modifier
                                                     .onFocusChanged { if (it.isFocused) focusedSeries = series }
-                                                    .then(if (index == 0) Modifier.focusRequester(contentFocusRequester) else Modifier),
+                                                    .then(if (isFocusedTarget || (focusedSeries == null && index == 0)) Modifier.focusRequester(contentFocusRequester) else Modifier),
                                                 onClick = { 
                                                     viewModel.loadSeriesDetails(series)
                                                     showSeriesDetails = true
