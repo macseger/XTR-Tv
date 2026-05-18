@@ -18,11 +18,13 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.tv.material3.Button
+import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.example.xtrtv.R
 import com.example.xtrtv.data.UserData
+import com.example.xtrtv.ui.theme.Turquoise
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -30,8 +32,6 @@ fun LoginScreen(
     onLoginSuccess: (UserData) -> Unit,
     viewModel: LoginViewModel = viewModel()
 ) {
-    val turquoise = Color(0xFF00CED1)
-
     LaunchedEffect(Unit) {
         viewModel.loginSuccess.collect { userData ->
             onLoginSuccess(userData)
@@ -70,10 +70,10 @@ fun LoginScreen(
                 unfocusedTextColor = Color.White,
                 focusedTextColor = Color.White,
                 unfocusedLabelColor = Color.Gray,
-                focusedLabelColor = turquoise,
+                focusedLabelColor = Turquoise,
                 unfocusedBorderColor = Color.Gray,
-                focusedBorderColor = turquoise,
-                cursorColor = turquoise
+                focusedBorderColor = Turquoise,
+                cursorColor = Turquoise
             )
 
             OutlinedTextField(
@@ -122,11 +122,17 @@ fun LoginScreen(
             Spacer(modifier = Modifier.height(32.dp))
 
             if (viewModel.isLoading) {
-                CircularProgressIndicator(color = turquoise)
+                CircularProgressIndicator(color = Turquoise)
             } else {
                 Button(
                     onClick = { viewModel.login() },
-                    modifier = Modifier.width(200.dp)
+                    modifier = Modifier.width(200.dp),
+                    colors = ButtonDefaults.colors(
+                        containerColor = Color.White.copy(alpha = 0.1f),
+                        focusedContainerColor = Turquoise,
+                        contentColor = Color.White,
+                        focusedContentColor = Color.Black
+                    )
                 ) {
                     Text("Logga in", modifier = Modifier.padding(vertical = 4.dp))
                 }
