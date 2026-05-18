@@ -5,6 +5,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -1436,7 +1437,7 @@ fun RecentChannelsOverlay(
         Column(
             modifier = Modifier
                 .fillMaxHeight()
-                .width(300.dp)
+                .width(400.dp)
                 .background(Color(0xFF121212).copy(alpha = 0.95f))
                 .padding(24.dp)
                 .clickable(enabled = false) {},
@@ -1508,10 +1509,10 @@ fun RecentChannelsOverlay(
                             Spacer(modifier = Modifier.width(12.dp))
                             Text(
                                 text = channel.name,
+                                modifier = Modifier.weight(1f).basicMarquee(),
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.Bold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                                maxLines = 1
                             )
                         }
                     }
