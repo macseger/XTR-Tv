@@ -213,6 +213,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 // 2. Background Sync: Start a "gentle" sync if needed
                 if (isSyncNeeded()) {
                     startGentleBackgroundSync()
+                } else {
+                    // Even if not full sync needed, always do a fast channel sync on start
+                    fastSyncChannels()
                 }
                 
             } catch (e: Exception) {
@@ -221,6 +224,48 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             } finally {
                 isLoading = false
                 backgroundStatus = null
+            }
+        }
+    }
+
+    private fun fastSyncChannels() {
+        val data = userData ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val apiService = ApiClient.createService(data.url)
+                
+                // 1. Sync Live Categories
+                val catResp = apiService.getLiveCategories(data.username, data.password)
+                if (catResp.isSuccessful) {
+                    val apiCategories = catResp.body() ?: emptyList()
+                    dao.insertCategories(apiCategories.map { CategoryEntity(it.id, it.name, "live") })
+                    
+                    if (currentMode == AppMode.LIVE) {
+                        val updatedCats = apiCategories.map { Category(it.id, cleanCategoryName(it.name), "live") }
+                        withContext(Dispatchers.Main) {
+                            categories = updatedCats
+                        }
+                    }
+
+                    // 2. Sync Live Streams for the currently selected category if in LIVE mode
+                    val targetCatId = selectedCategory?.id
+                    if (currentMode == AppMode.LIVE && targetCatId != null && targetCatId != "history") {
+                        val streamResp = apiService.getLiveStreams(data.username, data.password, categoryId = targetCatId)
+                        if (streamResp.isSuccessful) {
+                            val apiStreams = streamResp.body() ?: emptyList()
+                            dao.insertStreams(apiStreams.map { 
+                                StreamEntity(it.streamId, it.name, it.streamIcon, it.categoryId, it.num, it.epgChannelId)
+                            })
+                            val sortedStreams = apiStreams.sortedBy { it.num ?: it.streamId }
+                            withContext(Dispatchers.Main) {
+                                channels = sortedStreams
+                                refreshEpgMap()
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Fast sync failed", e)
             }
         }
     }
@@ -234,9 +279,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val data = userData ?: return@launch
                 val apiService = ApiClient.createService(data.url)
                 
-                // A. Sync VOD/Series Categories first (Small metadata)
                 backgroundSyncMessage = getApplication<Application>().getString(R.string.loading) + "..."
-                
+
+                // 1. Sync Live Categories and Channels first (Fast)
+                val liveCatResp = apiService.getLiveCategories(data.username, data.password)
+                if (liveCatResp.isSuccessful) {
+                    val apiCategories = liveCatResp.body() ?: emptyList()
+                    dao.insertCategories(apiCategories.map { CategoryEntity(it.id, it.name, "live") })
+                    if (currentMode == AppMode.LIVE) {
+                        val updatedCats = apiCategories.map { Category(it.id, cleanCategoryName(it.name), "live") }
+                        withContext(Dispatchers.Main) { categories = updatedCats }
+                    }
+                }
+
+                // 2. IMPORTANT: Sync EPG BEFORE VOD/Series
+                backgroundSyncMessage = getApplication<Application>().getString(R.string.updating_epg)
+                fetchEpgFromApi() // Already has batching and internal refreshEpgMap()
+
+                // 3. Sync VOD/Series Categories
+                backgroundSyncMessage = "Syncing Categories..."
                 val vCatResp = apiService.getVodCategories(data.username, data.password)
                 if (vCatResp.isSuccessful) {
                     dao.insertCategories(vCatResp.body()?.map { CategoryEntity(it.id, it.name, "vod") } ?: emptyList())
@@ -247,14 +308,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     dao.insertCategories(sCatResp.body()?.map { CategoryEntity(it.id, it.name, "series") } ?: emptyList())
                 }
 
-                // B. Sync Content in small chunks with delays (The "Gentle" part)
-                // Use smaller chunks and longer delays to ensure UI thread database access isn't blocked
+                // 4. Sync Content in small chunks with delays
                 
                 // Throttled VOD Sync
                 val vodResp = apiService.getVodStreams(data.username, data.password)
                 if (vodResp.isSuccessful) {
                     val movies = vodResp.body() ?: emptyList()
-                    val chunks = movies.chunked(100) // Slightly larger chunks for background
+                    val chunks = movies.chunked(100)
                     chunks.forEachIndexed { index, chunk ->
                         backgroundSyncMessage = "Syncing VOD: ${((index + 1) * 100 * 100 / movies.size).coerceAtMost(100)}%"
                         dao.insertVod(chunk.map { 
@@ -281,10 +341,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         kotlinx.coroutines.delay(200)
                     }
                 }
-
-                // C. Finally EPG
-                backgroundSyncMessage = getApplication<Application>().getString(R.string.updating_epg)
-                fetchEpgFromApi() // Already has batching
 
                 prefs.lastFullSync = System.currentTimeMillis()
                 backgroundSyncMessage = "Update Complete!"
@@ -516,13 +572,38 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             isLoading = true
             try {
-                withContext(Dispatchers.IO) {
-                    dao.clearStreams()
-                    dao.clearCategories()
+                // Now just does the fast sync logic but with UI loading indicator
+                val data = userData!!
+                val apiService = ApiClient.createService(data.url)
+                
+                val catResp = apiService.getLiveCategories(data.username, data.password)
+                if (catResp.isSuccessful) {
+                    val apiCategories = catResp.body() ?: emptyList()
+                    withContext(Dispatchers.IO) {
+                        dao.insertCategories(apiCategories.map { CategoryEntity(it.id, it.name, "live") })
+                    }
+                    
+                    if (currentMode == AppMode.LIVE) {
+                        categories = apiCategories.map { Category(it.id, cleanCategoryName(it.name), "live") }
+                    }
+
+                    val targetCatId = selectedCategory?.id
+                    if (currentMode == AppMode.LIVE && targetCatId != null && targetCatId != "history") {
+                        val streamResp = apiService.getLiveStreams(data.username, data.password, categoryId = targetCatId)
+                        if (streamResp.isSuccessful) {
+                            val apiStreams = streamResp.body() ?: emptyList()
+                            withContext(Dispatchers.IO) {
+                                dao.insertStreams(apiStreams.map { 
+                                    StreamEntity(it.streamId, it.name, it.streamIcon, it.categoryId, it.num, it.epgChannelId)
+                                })
+                            }
+                            channels = apiStreams.sortedBy { it.num ?: it.streamId }
+                            refreshEpgMap()
+                        }
+                    }
                 }
-                fetchCategories()
             } catch (e: Exception) {
-                Log.e(TAG, "Error forcing channel update", e)
+                Log.e(TAG, "Error updating channels", e)
             } finally {
                 isLoading = false
             }
