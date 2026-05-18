@@ -41,8 +41,10 @@ fun SeriesDetailsOverlay(
 ) {
     val details = viewModel.seriesDetails
     var selectedSeason by remember { mutableStateOf<String?>(null) }
+    var showFullPlot by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
     val continueFocusRequester = remember { FocusRequester() }
+    val moreInfoFocusRequester = remember { FocusRequester() }
 
     // Reset season when series details change
     LaunchedEffect(details?.info?.name, viewModel.lastWatchedEpisode) {
@@ -110,11 +112,11 @@ fun SeriesDetailsOverlay(
                     .clickable(enabled = false) {}
             ) {
                 // Left side: Poster & Detailed Plot
-                Column(modifier = Modifier.width(260.dp).fillMaxHeight().padding(end = 40.dp)) {
+                Column(modifier = Modifier.width(220.dp).fillMaxHeight().padding(end = 30.dp)) {
                     Surface(
                         onClick = {},
                         shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(12.dp)),
-                        modifier = Modifier.width(220.dp).aspectRatio(0.7f),
+                        modifier = Modifier.width(180.dp).aspectRatio(0.7f),
                         border = ClickableSurfaceDefaults.border(
                             border = Border(androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.15f))),
                             focusedBorder = Border(androidx.compose.foundation.BorderStroke(2.dp, Turquoise))
@@ -129,11 +131,11 @@ fun SeriesDetailsOverlay(
                         )
                     }
                     
-                    Spacer(modifier = Modifier.height(32.dp))
+                    Spacer(modifier = Modifier.height(20.dp))
                     
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(bottom = 12.dp)
+                        modifier = Modifier.padding(bottom = 8.dp)
                     ) {
                         Icon(Icons.Default.Star, null, tint = Color(0xFFFFD700), modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
@@ -157,17 +159,41 @@ fun SeriesDetailsOverlay(
                         color = Turquoise,
                         letterSpacing = 1.5.sp,
                         fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(bottom = 8.dp)
+                        modifier = Modifier.padding(bottom = 4.dp)
                     )
                     
+                    val plot = details.info?.plot ?: ""
                     Text(
-                        text = details.info?.plot ?: "",
-                        style = MaterialTheme.typography.bodyMedium,
+                        text = plot,
+                        style = MaterialTheme.typography.bodySmall,
                         color = Color.White.copy(alpha = 0.7f),
-                        maxLines = 12,
-                        lineHeight = 22.sp,
+                        maxLines = 6,
+                        lineHeight = 18.sp,
                         overflow = TextOverflow.Ellipsis
                     )
+
+                    if (plot.length > 150) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Surface(
+                            onClick = { showFullPlot = true },
+                            modifier = Modifier.focusRequester(moreInfoFocusRequester),
+                            colors = ClickableSurfaceDefaults.colors(
+                                containerColor = Color.White.copy(alpha = 0.1f),
+                                contentColor = Color.White,
+                                focusedContainerColor = Color.White,
+                                focusedContentColor = Color.Black
+                            ),
+                            shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(8.dp)),
+                            scale = ClickableSurfaceDefaults.scale(focusedScale = 1.1f)
+                        ) {
+                            Text(
+                                text = "MERA INFO",
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
                 }
 
                 // Right side: Title, Selection & Episodes
@@ -175,19 +201,21 @@ fun SeriesDetailsOverlay(
                     // Title at the top right
                     Text(
                         text = details.info?.name ?: "",
-                        style = MaterialTheme.typography.displayMedium,
+                        style = MaterialTheme.typography.headlineLarge.copy(
+                            fontWeight = FontWeight.Black,
+                            fontSize = 32.sp
+                        ),
                         color = Color.White,
-                        fontWeight = FontWeight.Black,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(bottom = 8.dp)
+                        modifier = Modifier.padding(bottom = 4.dp)
                     )
                     
                     Text(
                         text = details.info?.genre ?: "",
-                        style = MaterialTheme.typography.titleMedium,
+                        style = MaterialTheme.typography.titleSmall,
                         color = Color.White.copy(alpha = 0.5f),
-                        modifier = Modifier.padding(bottom = 32.dp)
+                        modifier = Modifier.padding(bottom = 24.dp)
                     )
 
                     // Compact Actions & Seasons Row
@@ -361,6 +389,57 @@ fun SeriesDetailsOverlay(
                             focusRequester.requestFocus()
                         }
                     }
+                }
+            }
+        }
+    }
+
+    if (showFullPlot) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.9f))
+                .clickable { showFullPlot = false },
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                modifier = Modifier
+                    .width(600.dp)
+                    .background(Color(0xFF121212), RoundedCornerShape(24.dp))
+                    .padding(40.dp)
+                    .clickable(enabled = false) {}
+            ) {
+                Text(
+                    text = "INNEHÅLL",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = Turquoise,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+                Text(
+                    text = details?.info?.plot ?: "",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = Color.White,
+                    lineHeight = 26.sp
+                )
+                Spacer(modifier = Modifier.height(32.dp))
+                Surface(
+                    onClick = { showFullPlot = false },
+                    modifier = Modifier.align(Alignment.End),
+                    colors = ClickableSurfaceDefaults.colors(
+                        containerColor = Turquoise,
+                        contentColor = Color.Black,
+                        focusedContainerColor = Color.White,
+                        focusedContentColor = Color.Black
+                    ),
+                    shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(8.dp))
+                ) {
+                    Text(
+                        text = "STÄNG",
+                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 10.dp),
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
         }
