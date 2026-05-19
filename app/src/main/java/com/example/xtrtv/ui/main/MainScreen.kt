@@ -788,14 +788,14 @@ fun MainScreen(
                                                 Text(
                                                     text = "${timeFormat.format(Date(epg.start))} - ${timeFormat.format(Date(epg.stop))}",
                                                     color = Turquoise,
-                                                    style = MaterialTheme.typography.titleMedium,
+                                                    style = MaterialTheme.typography.titleLarge,
                                                     fontWeight = FontWeight.Bold
                                                 )
                                                 Spacer(modifier = Modifier.width(20.dp))
                                                 Text(
                                                     text = epg.title,
                                                     color = Color.White.copy(alpha = 0.9f),
-                                                    style = MaterialTheme.typography.titleMedium,
+                                                    style = MaterialTheme.typography.titleLarge,
                                                     fontWeight = FontWeight.Bold,
                                                     maxLines = 1,
                                                     overflow = TextOverflow.Ellipsis
@@ -811,14 +811,14 @@ fun MainScreen(
                                                 Text(
                                                     text = "${stringResource(R.string.next_label)}: ${timeFormat.format(Date(nextEpg.start))} - ${timeFormat.format(Date(nextEpg.stop))}",
                                                     color = Color.Gray,
-                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    style = MaterialTheme.typography.titleSmall,
                                                     fontWeight = FontWeight.Bold
                                                 )
                                                 Spacer(modifier = Modifier.width(20.dp))
                                                 Text(
                                                     text = nextEpg.title,
                                                     color = Color.Gray.copy(alpha = 0.8f),
-                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    style = MaterialTheme.typography.titleSmall,
                                                     maxLines = 1,
                                                     overflow = TextOverflow.Ellipsis
                                                 )
@@ -955,7 +955,7 @@ fun MainScreen(
                                                 if (epgEntry != null) {
                                                     Text(
                                                         text = epgEntry.title,
-                                                        style = MaterialTheme.typography.bodySmall,
+                                                        style = MaterialTheme.typography.bodyLarge,
                                                         maxLines = 1,
                                                         overflow = TextOverflow.Ellipsis,
                                                         color = if (isPlaying) Turquoise else LocalContentColor.current.copy(alpha = 0.7f)
@@ -973,7 +973,7 @@ fun MainScreen(
                                                     }
                                                     Text(
                                                         text = timeRange,
-                                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp),
                                                         color = LocalContentColor.current.copy(alpha = 0.5f)
                                                     )
                                                     Spacer(modifier = Modifier.height(2.dp))
@@ -1707,7 +1707,7 @@ fun ChannelEpgOverlay(
                                 ) {
                                     Text(
                                         text = "${timeFormat.format(Date(program.start))} - ${timeFormat.format(Date(program.stop))}",
-                                        style = MaterialTheme.typography.labelMedium,
+                                        style = MaterialTheme.typography.labelLarge,
                                         fontWeight = FontWeight.Bold,
                                         color = if (isNow) Turquoise else Color.Gray
                                     )
@@ -1726,7 +1726,7 @@ fun ChannelEpgOverlay(
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
                                     text = program.title,
-                                    style = MaterialTheme.typography.bodyMedium,
+                                    style = MaterialTheme.typography.bodyLarge,
                                     fontWeight = FontWeight.Bold,
                                     maxLines = 2,
                                     overflow = TextOverflow.Ellipsis
@@ -1734,7 +1734,7 @@ fun ChannelEpgOverlay(
                                 if (!program.description.isNullOrBlank()) {
                                     Text(
                                         text = program.description,
-                                        style = MaterialTheme.typography.bodySmall,
+                                        style = MaterialTheme.typography.bodyMedium,
                                         color = if (isNow) Color.Unspecified else Color.Gray,
                                         maxLines = 2,
                                         overflow = TextOverflow.Ellipsis,
