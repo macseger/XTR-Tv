@@ -395,8 +395,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
             .build()
 
+        val httpDataSourceFactory = DefaultHttpDataSource.Factory()
+            .setUserAgent("TiviMate") // Samma som i ApiClient för att undvika blockeringar
+            .setAllowCrossProtocolRedirects(true)
+
         player = ExoPlayer.Builder(context, renderersFactory)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(context, extractorsFactory))
+            .setMediaSourceFactory(DefaultMediaSourceFactory(context, extractorsFactory)
+                .setDataSourceFactory(httpDataSourceFactory))
             .setLoadControl(loadControl)
             .setAudioAttributes(audioAttributes, true)
             .setVideoScalingMode(C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING)
@@ -1326,8 +1331,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         player?.clearMediaItems()
         
         val baseUrl = data.url.removeSuffix("/")
-        // Försök tvinga m3u8-format för live om .ts krånglar
-        val streamUrl = "$baseUrl/live/${data.username}/${data.password}/${stream.streamId}.m3u8"
+        // Många servrar kräver .ts för live-strömmar, ändrat från .m3u8 pga 403-fel i logcat
+        val streamUrl = "$baseUrl/live/${data.username}/${data.password}/${stream.streamId}.ts"
         
         val mediaItem = MediaItem.Builder()
             .setUri(streamUrl)
