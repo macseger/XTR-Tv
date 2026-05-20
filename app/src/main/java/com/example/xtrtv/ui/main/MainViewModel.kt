@@ -35,6 +35,8 @@ import com.example.xtrtv.utils.UpdateManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val TAG = "MainViewModel"
@@ -42,7 +44,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val PREFIX_REGEX = Regex("^(se|se:|sweden|sweden:)\\s*")
     private val BRACKET_REGEX = Regex("[\\[(].*?[\\])]")
     private val SUFFIX_REGEX = Regex("\\s+(fhd|hd|sd|hevc|4k|se|s)$")
-    private val CLEAN_REGEX = Regex("[^a-z0-9]")
+    private val CLEAN_REGEX = Regex("[^a-z0-9åäö]")
     private val CAT_PREFIX_REGEX = Regex("^(Movies|Series|Filmer|Serier)\\s*[:\\-]\\s*", RegexOption.IGNORE_CASE)
 
     enum class AppMode { LIVE, VOD, SERIES }
@@ -58,7 +60,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // Series details
     var selectedSeries by mutableStateOf<Series?>(null)
     var seriesDetails by mutableStateOf<SeriesDetailsResponse?>(null)
-    var lastWatchedEpisode by mutableStateOf<com.example.xtrtv.api.Episode?>(null)
+    var lastWatchedEpisode by mutableStateOf<Episode?>(null)
     var isSeriesLoading by mutableStateOf(false)
     
     // Movie details
@@ -73,6 +75,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private var channelIdMap = emptyMap<String, String>()
     private var normalizedChannelIdMap = emptyMap<String, String>()
+    private val epgMappingMutex = Mutex()
 
     private fun updateChannelMappings(newMap: Map<String, String>) {
         channelIdMap = newMap
@@ -99,7 +102,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     
     // Resume dialog state
     var pendingMovie by mutableStateOf<VodMovie?>(null)
-    var pendingEpisode by mutableStateOf<com.example.xtrtv.api.Episode?>(null)
+    var pendingEpisode by mutableStateOf<Episode?>(null)
     var currentSeriesId by mutableStateOf<Int?>(null)
     var savedPosition by mutableLongStateOf(0L)
     var showResumeDialog by mutableStateOf(false)
@@ -153,7 +156,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     var latestRelease by mutableStateOf<GithubRelease?>(null)
 
     var showNextEpisodeDialog by mutableStateOf(false)
-    var nextEpisode: com.example.xtrtv.api.Episode? = null
+    var nextEpisode: Episode? = null
 
     private var categoryLoadJob: kotlinx.coroutines.Job? = null
     private var syncJob: kotlinx.coroutines.Job? = null
@@ -358,16 +361,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     @OptIn(UnstableApi::class)
-    fun init(context: Context, data: UserData) {
+    fun init(data: UserData) {
         if (this.userData != null) return
         this.userData = data
         
+        val appContext = getApplication<Application>().applicationContext
         isTunnelingEnabled = prefs.isTunnelingEnabled
         isFrameRateMatchingEnabled = prefs.isFrameRateMatchingEnabled
         customEpgUrl = prefs.customEpgUrl
         useInternalSwedishEpg = prefs.useInternalSwedishEpg
         
-        val renderersFactory = DefaultRenderersFactory(context).apply {
+        val renderersFactory = DefaultRenderersFactory(appContext).apply {
             setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
             setEnableDecoderFallback(true)
         }
@@ -399,15 +403,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             .setUserAgent("TiviMate") // Samma som i ApiClient för att undvika blockeringar
             .setAllowCrossProtocolRedirects(true)
 
-        player = ExoPlayer.Builder(context, renderersFactory)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(context, extractorsFactory)
+        player = ExoPlayer.Builder(appContext, renderersFactory)
+            .setMediaSourceFactory(DefaultMediaSourceFactory(appContext, extractorsFactory)
                 .setDataSourceFactory(httpDataSourceFactory))
             .setLoadControl(loadControl)
             .setAudioAttributes(audioAttributes, true)
             .setVideoScalingMode(C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING)
             .build().apply {
             
-            trackSelectionParameters = DefaultTrackSelector.Parameters.Builder(context)
+            trackSelectionParameters = DefaultTrackSelector.Parameters.Builder(appContext)
                 .setTunnelingEnabled(isTunnelingEnabled)
                 .build()
             
@@ -564,12 +568,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private suspend fun syncAllContent(force: Boolean = false) {
-        // Not used anymore in favor of startGentleBackgroundSync
-        // but keeping it as a stub if needed for manual force refresh
     }
 
     private fun fetchAllContentForSearch() {
-        // Handled by background sync
     }
 
     fun forceUpdateChannels() {
@@ -682,79 +683,81 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val currentChannels = channels
         if (currentChannels.isEmpty()) return@withContext
         
-        isMappingEpg = true
-        try {
-            // 1. Collect all candidate IDs for all channels to fetch in bulk
-            val allCandidateIds = mutableSetOf<String>()
-            val channelCandidatesMap = mutableMapOf<Int, List<String>>()
+        epgMappingMutex.withLock {
+            isMappingEpg = true
+            try {
+                // 1. Collect all candidate IDs for all channels to fetch in bulk
+                val allCandidateIds = mutableSetOf<String>()
+                val channelCandidatesMap = mutableMapOf<Int, List<String>>()
 
-            currentChannels.forEach { stream ->
-                val candidates = mutableListOf<String>()
-                // Priority 1: Direct ID from stream
-                if (!stream.epgChannelId.isNullOrBlank() && stream.epgChannelId != "null") {
-                    candidates.add(stream.epgChannelId)
+                currentChannels.forEach { stream ->
+                    val candidates = mutableListOf<String>()
+                    // Priority 1: Direct ID from stream
+                    if (!stream.epgChannelId.isNullOrBlank() && stream.epgChannelId != "null") {
+                        candidates.add(stream.epgChannelId)
+                    }
+                    // Priority 2: Exact name match
+                    channelIdMap[stream.name]?.let { candidates.add(it) }
+                    // Priority 3: Normalized name match
+                    normalizedChannelIdMap[normalizeName(stream.name)]?.let { candidates.add(it) }
+                    
+                    val uniqueCandidates = candidates.distinct()
+                    channelCandidatesMap[stream.streamId] = uniqueCandidates
+                    allCandidateIds.addAll(uniqueCandidates)
                 }
-                // Priority 2: Exact name match
-                channelIdMap[stream.name]?.let { candidates.add(it) }
-                // Priority 3: Normalized name match
-                normalizedChannelIdMap[normalizeName(stream.name)]?.let { candidates.add(it) }
-                
-                val uniqueCandidates = candidates.distinct()
-                channelCandidatesMap[stream.streamId] = uniqueCandidates
-                allCandidateIds.addAll(uniqueCandidates)
-            }
 
-            // 2. Fetch all upcoming programs for these IDs
-            val programs = if (allCandidateIds.isNotEmpty()) {
-                withContext(Dispatchers.IO) {
-                    dao.getUpcomingEpgForChannels(allCandidateIds.toList(), currentTimeMs)
-                }
-            } else {
-                emptyList()
-            }
-            
-            // Group by channelId and take Current and Next
-            val groupedPrograms = programs.groupBy { it.channelId }
-            val currentProgramLookup = mutableMapOf<String, EpgEntity>()
-            val nextProgramLookup = mutableMapOf<String, EpgEntity>()
-
-            groupedPrograms.forEach { (channelId, channelPrograms) ->
-                val current = channelPrograms.find { it.start <= currentTimeMs && it.stop >= currentTimeMs }
-                val next = if (current != null) {
-                    channelPrograms.find { it.start >= current.stop }
+                // 2. Fetch all upcoming programs for these IDs
+                val programs = if (allCandidateIds.isNotEmpty()) {
+                    withContext(Dispatchers.IO) {
+                        dao.getUpcomingEpgForChannels(allCandidateIds.toList(), currentTimeMs)
+                    }
                 } else {
-                    channelPrograms.firstOrNull()
+                    emptyList()
                 }
                 
-                if (current != null) currentProgramLookup[channelId] = current
-                if (next != null) nextProgramLookup[channelId] = next
-            }
+                // Group by channelId and take Current and Next
+                val groupedPrograms = programs.groupBy { it.channelId }
+                val currentProgramLookup = mutableMapOf<String, EpgEntity>()
+                val nextProgramLookup = mutableMapOf<String, EpgEntity>()
 
-            // 3. Map programs back to channels based on priority
-            val newEpgMap = mutableMapOf<Int, EpgEntity>()
-            val newNextEpgMap = mutableMapOf<Int, EpgEntity>()
-            currentChannels.forEach { stream ->
-                val candidates = channelCandidatesMap[stream.streamId] ?: emptyList()
-                for (id in candidates) {
-                    val currentMatch = currentProgramLookup[id]
-                    if (currentMatch != null) {
-                        newEpgMap[stream.streamId] = currentMatch
+                groupedPrograms.forEach { (channelId, channelPrograms) ->
+                    val current = channelPrograms.find { it.start <= currentTimeMs && it.stop >= currentTimeMs }
+                    val next = if (current != null) {
+                        channelPrograms.find { it.start >= current.stop }
+                    } else {
+                        channelPrograms.firstOrNull()
                     }
-                    val nextMatch = nextProgramLookup[id]
-                    if (nextMatch != null) {
-                        newNextEpgMap[stream.streamId] = nextMatch
-                    }
-                    if (currentMatch != null || nextMatch != null) break
+                    
+                    if (current != null) currentProgramLookup[channelId] = current
+                    if (next != null) nextProgramLookup[channelId] = next
                 }
+
+                // 3. Map programs back to channels based on priority
+                val newEpgMap = mutableMapOf<Int, EpgEntity>()
+                val newNextEpgMap = mutableMapOf<Int, EpgEntity>()
+                currentChannels.forEach { stream ->
+                    val candidates = channelCandidatesMap[stream.streamId] ?: emptyList()
+                    for (id in candidates) {
+                        val currentMatch = currentProgramLookup[id]
+                        if (currentMatch != null) {
+                            newEpgMap[stream.streamId] = currentMatch
+                        }
+                        val nextMatch = nextProgramLookup[id]
+                        if (nextMatch != null) {
+                            newNextEpgMap[stream.streamId] = nextMatch
+                        }
+                        if (currentMatch != null || nextMatch != null) break
+                    }
+                }
+                
+                withContext(Dispatchers.Main) {
+                    epgMap = newEpgMap
+                    nextEpgMap = newNextEpgMap
+                    Log.i(TAG, "EPG Map updated: ${newEpgMap.size} current, ${newNextEpgMap.size} next matches found")
+                }
+            } finally {
+                isMappingEpg = false
             }
-            
-            withContext(Dispatchers.Main) {
-                epgMap = newEpgMap
-                nextEpgMap = newNextEpgMap
-                Log.i(TAG, "EPG Map updated: ${newEpgMap.size} current, ${newNextEpgMap.size} next matches found")
-            }
-        } finally {
-            isMappingEpg = false
         }
     }
 
@@ -825,7 +828,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val entity = dao.getStreamById(lastId)
             withContext(Dispatchers.Main) {
                 if (entity != null) {
-                    val stream = com.example.xtrtv.api.LiveStream(
+                    val stream = LiveStream(
                         entity.streamId, entity.name, entity.streamIcon, entity.categoryId, entity.num, entity.epgChannelId
                     )
                     playChannel(stream)
@@ -1589,11 +1592,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         val pInfo = getApplication<Application>()
                             .packageManager
                             .getPackageInfo(getApplication<Application>().packageName, 0)
-                        val currentVersion = pInfo.versionName
+                        val currentVersion = (pInfo.versionName ?: "0.0.0").removePrefix("v")
+                        val githubVersion = (release.tag_name ?: "0.0.0").removePrefix("v")
                         
-                        Log.d(TAG, "Current app version: $currentVersion, GitHub version: ${release.tag_name}")
+                        Log.d(TAG, "Current app version: $currentVersion, GitHub version: $githubVersion")
                             
-                        if (release.tag_name != currentVersion) {
+                        if (githubVersion != currentVersion) {
                             latestRelease = release
                             updateStatus = getApplication<Application>().getString(R.string.update_available)
                         } else {

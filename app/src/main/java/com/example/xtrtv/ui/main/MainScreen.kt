@@ -143,7 +143,7 @@ fun MainScreen(
     }
 
     LaunchedEffect(userData) {
-        viewModel.init(context, userData)
+        viewModel.init(userData)
         
         viewModel.initialSync(onChannelsReady = {
             showChannelList = true
