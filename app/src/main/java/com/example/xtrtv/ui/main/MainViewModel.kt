@@ -396,8 +396,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             .setBufferDurationsMs(
                 30_000, // Min buffer
                 60_000, // Max buffer
-                5_000,  // Buffer for playback
-                10_000   // Buffer for rebuffering
+                2_500,  // Buffer for playback
+                5_000   // Buffer for rebuffering
             )
             .setPrioritizeTimeOverSizeThresholds(true)
             .setBackBuffer(10_000, true)
