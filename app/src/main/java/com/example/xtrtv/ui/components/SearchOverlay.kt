@@ -41,6 +41,7 @@ fun SearchOverlay(
     onOpenSeries: (com.example.xtrtv.api.Series) -> Unit
 ) {
     val focusRequester = remember { FocusRequester() }
+    val resultsFocusRequester = remember { FocusRequester() }
 
     LaunchedEffect(Unit) {
         viewModel.loadSearchHistory()
@@ -49,7 +50,7 @@ fun SearchOverlay(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.95f))
+            .background(Color.Black.copy(alpha = 0.98f))
             .clickable { onClose() }
     ) {
         Column(
@@ -95,27 +96,18 @@ fun SearchOverlay(
                     modifier = Modifier.fillMaxSize(),
                     verticalArrangement = Arrangement.spacedBy(24.dp)
                 ) {
-                    if (viewModel.filteredVod.isNotEmpty() || viewModel.filteredSeries.isNotEmpty()) {
-                        item {
-                            // Suggest saving this query if results were found
-                            LaunchedEffect(viewModel.searchQuery) {
-                                // We could automatically save, or wait for a click. 
-                                // Let's save it when they actually interact with a result in the UI.
-                            }
-                        }
-                    }
-
                     if (viewModel.filteredVod.isNotEmpty()) {
                         item {
                             Text(stringResource(R.string.movies), style = MaterialTheme.typography.labelLarge, color = Color.Gray)
                             Spacer(modifier = Modifier.height(16.dp))
                             LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                                items(viewModel.filteredVod) { movie ->
+                                itemsIndexed(viewModel.filteredVod) { index, movie ->
                                     Box(modifier = Modifier.width(150.dp)) {
                                         VodCard(
                                             title = movie.name,
                                             posterUrl = movie.streamIcon,
                                             rating = movie.rating,
+                                            modifier = if (index == 0) Modifier.focusRequester(resultsFocusRequester) else Modifier,
                                             onClick = { 
                                                 viewModel.saveSearchQuery(viewModel.searchQuery)
                                                 onPlayVod(movie) 
@@ -132,12 +124,14 @@ fun SearchOverlay(
                             Text(stringResource(R.string.series), style = MaterialTheme.typography.labelLarge, color = Color.Gray)
                             Spacer(modifier = Modifier.height(16.dp))
                             LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                                items(viewModel.filteredSeries) { series ->
+                                itemsIndexed(viewModel.filteredSeries) { index, series ->
+                                    val isFirstResult = viewModel.filteredVod.isEmpty() && index == 0
                                     Box(modifier = Modifier.width(150.dp)) {
                                         VodCard(
                                             title = series.name,
                                             posterUrl = series.cover,
                                             rating = series.rating,
+                                            modifier = if (isFirstResult) Modifier.focusRequester(resultsFocusRequester) else Modifier,
                                             onClick = { 
                                                 viewModel.saveSearchQuery(viewModel.searchQuery)
                                                 onOpenSeries(series) 
@@ -173,7 +167,11 @@ fun SearchOverlay(
                         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             items(viewModel.searchHistory) { query ->
                                 Surface(
-                                    onClick = { viewModel.performSearch(query) },
+                                    onClick = { 
+                                        viewModel.performSearch(query)
+                                        // Refocus text field to maintain focus state after UI swap
+                                        focusRequester.requestFocus()
+                                    },
                                     modifier = Modifier.fillMaxWidth(),
                                     colors = ClickableSurfaceDefaults.colors(
                                         containerColor = Color.White.copy(alpha = 0.05f),
