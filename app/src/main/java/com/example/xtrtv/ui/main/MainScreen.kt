@@ -71,7 +71,9 @@ import com.example.xtrtv.api.*
 import com.example.xtrtv.ui.components.*
 import com.example.xtrtv.utils.UpdateManager
 import com.example.xtrtv.ui.theme.Turquoise
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.*
@@ -104,6 +106,10 @@ fun MainScreen(
     var focusCategoryTrigger by remember { mutableIntStateOf(0) }
     var focusPlayingNow by remember { mutableStateOf(true) }
     
+    var numericInput by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
+    var numericJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+
     var focusedChannel by remember { mutableStateOf<LiveStream?>(null) }
     var focusedMovie by remember { mutableStateOf<VodMovie?>(null) }
     var focusedSeries by remember { mutableStateOf<Series?>(null) }
@@ -378,7 +384,26 @@ fun MainScreen(
 
                 if (!isAnyOverlayVisible) {
                     if (event.type == KeyEventType.KeyDown) {
-                        when (event.nativeKeyEvent.keyCode) {
+                        val keyCode = event.nativeKeyEvent.keyCode
+                        if (keyCode in android.view.KeyEvent.KEYCODE_0..android.view.KeyEvent.KEYCODE_9) {
+                            val number = keyCode - android.view.KeyEvent.KEYCODE_0
+                            numericInput += number.toString()
+                            numericJob?.cancel()
+                            numericJob = scope.launch {
+                                kotlinx.coroutines.delay(1500) // Vänta 1.5 sek på fler siffror
+                                val channelNum = numericInput.toIntOrNull()
+                                if (channelNum != null) {
+                                    val target = viewModel.channels.find { it.num == channelNum }
+                                    if (target != null) {
+                                        viewModel.playChannel(target)
+                                    }
+                                }
+                                numericInput = ""
+                            }
+                            return@onKeyEvent true
+                        }
+
+                        when (keyCode) {
                             android.view.KeyEvent.KEYCODE_DPAD_CENTER,
                             android.view.KeyEvent.KEYCODE_ENTER,
                             android.view.KeyEvent.KEYCODE_NUMPAD_ENTER -> {
@@ -400,6 +425,61 @@ fun MainScreen(
                                     showChannelList = true
                                 } else {
                                     viewModel.togglePlayPause()
+                                    showPlaybackControls = true
+                                }
+                                true
+                            }
+                            android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
+                            android.view.KeyEvent.KEYCODE_MEDIA_PLAY,
+                            android.view.KeyEvent.KEYCODE_MEDIA_PAUSE -> {
+                                viewModel.togglePlayPause()
+                                if (!viewModel.isPlaying) showPlaybackControls = true
+                                true
+                            }
+                            android.view.KeyEvent.KEYCODE_MEDIA_STOP -> {
+                                viewModel.getPlayer()?.pause()
+                                true
+                            }
+                            android.view.KeyEvent.KEYCODE_MEDIA_NEXT -> {
+                                if (viewModel.activePlaybackMode != MainViewModel.AppMode.LIVE) {
+                                    viewModel.skipForward()
+                                    showPlaybackControls = true
+                                }
+                                true
+                            }
+                            android.view.KeyEvent.KEYCODE_MEDIA_PREVIOUS -> {
+                                if (viewModel.activePlaybackMode != MainViewModel.AppMode.LIVE) {
+                                    viewModel.skipBackward()
+                                    showPlaybackControls = true
+                                }
+                                true
+                            }
+                            android.view.KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> {
+                                viewModel.skipForward()
+                                showPlaybackControls = true
+                                true
+                            }
+                            android.view.KeyEvent.KEYCODE_MEDIA_REWIND -> {
+                                viewModel.skipBackward()
+                                showPlaybackControls = true
+                                true
+                            }
+                            android.view.KeyEvent.KEYCODE_CAPTIONS -> {
+                                showSubtitleMenu = true
+                                showContextMenu = true
+                                true
+                            }
+                            android.view.KeyEvent.KEYCODE_MENU -> {
+                                showContextMenu = !showContextMenu
+                                true
+                            }
+                            android.view.KeyEvent.KEYCODE_INFO -> {
+                                if (viewModel.activePlaybackMode == MainViewModel.AppMode.LIVE) {
+                                    viewModel.currentChannel?.let {
+                                        viewModel.loadChannelEpg(it)
+                                        showChannelEpg = true
+                                    }
+                                } else {
                                     showPlaybackControls = true
                                 }
                                 true
