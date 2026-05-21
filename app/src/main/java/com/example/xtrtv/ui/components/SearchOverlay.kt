@@ -118,8 +118,10 @@ fun SearchOverlay(
                         } else {
                             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 itemsIndexed(viewModel.filteredVod) { index, movie ->
+                                    val categoryName = viewModel.vodCategoryMap[movie.categoryId]
                                     SearchListItem(
                                         title = movie.name,
+                                        categoryName = categoryName,
                                         imageUrl = movie.streamIcon,
                                         modifier = if (index == 0) Modifier.focusRequester(resultsFocusRequester) else Modifier,
                                         onClick = {
@@ -150,8 +152,10 @@ fun SearchOverlay(
                         } else {
                             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 itemsIndexed(viewModel.filteredSeries) { index, series ->
+                                    val categoryName = viewModel.seriesCategoryMap[series.categoryId]
                                     SearchListItem(
                                         title = series.name,
+                                        categoryName = categoryName,
                                         imageUrl = series.cover,
                                         onClick = {
                                             viewModel.saveSearchQuery(viewModel.searchQuery)
@@ -230,6 +234,7 @@ fun SearchListItem(
     title: String,
     imageUrl: String?,
     modifier: Modifier = Modifier,
+    categoryName: String? = null,
     onClick: () -> Unit
 ) {
     Surface(
@@ -257,13 +262,24 @@ fun SearchListItem(
                 contentScale = ContentScale.Crop
             )
             Spacer(modifier = Modifier.width(12.dp))
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (!categoryName.isNullOrBlank()) {
+                    Text(
+                        text = categoryName,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Turquoise,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
         }
     }
 }

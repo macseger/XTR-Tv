@@ -158,6 +158,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     var showNextEpisodeDialog by mutableStateOf(false)
     var nextEpisode: Episode? = null
 
+    var vodCategoryMap by mutableStateOf<Map<String, String>>(emptyMap())
+    var seriesCategoryMap by mutableStateOf<Map<String, String>>(emptyMap())
+
     private var categoryLoadJob: kotlinx.coroutines.Job? = null
     private var syncJob: kotlinx.coroutines.Job? = null
 
@@ -358,6 +361,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
 
                 prefs.lastFullSync = System.currentTimeMillis()
+                refreshCategoryMaps()
                 backgroundSyncMessage = "Update Complete!"
                 kotlinx.coroutines.delay(3000)
                 backgroundSyncMessage = null
@@ -523,6 +527,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             while (true) {
                 currentTime = System.currentTimeMillis()
                 kotlinx.coroutines.delay(1000)
+            }
+        }
+        
+        refreshCategoryMaps()
+    }
+
+    fun refreshCategoryMaps() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val vod = dao.getCategoriesByType("vod").associate { it.id to cleanCategoryName(it.name) }
+            val series = dao.getCategoriesByType("series").associate { it.id to cleanCategoryName(it.name) }
+            withContext(Dispatchers.Main) {
+                vodCategoryMap = vod
+                seriesCategoryMap = series
             }
         }
     }
@@ -930,6 +947,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     withContext(Dispatchers.IO) {
                         dao.insertCategories(apiCategories.map { CategoryEntity(it.id, it.name, type) })
                     }
+                    refreshCategoryMaps()
 
                     if (categories.isNotEmpty()) {
                         selectCategory(categories.first(), forceRefresh = true)
