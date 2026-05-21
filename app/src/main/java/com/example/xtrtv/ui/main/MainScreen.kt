@@ -761,11 +761,11 @@ fun MainScreen(
                                     MainViewModel.AppMode.SERIES -> focusedSeries?.name
                                 } ?: ""
 
-                                // 1. Title (Significantly smaller and bolder)
+                                // 1. Title (Smaller and bolder)
                                 Text(
                                     text = itemTitle,
                                     style = MaterialTheme.typography.headlineSmall.copy(
-                                        fontSize = 26.sp,
+                                        fontSize = 20.sp,
                                         fontWeight = FontWeight.Black,
                                         letterSpacing = 0.sp
                                     ),
@@ -809,16 +809,16 @@ fun MainScreen(
                                                 modifier = Modifier.padding(top = 4.dp)
                                             ) {
                                                 Text(
-                                                    text = "${stringResource(R.string.next_label)}: ${timeFormat.format(Date(nextEpg.start))} - ${timeFormat.format(Date(nextEpg.stop))}",
+                                                    text = "${stringResource(R.string.next_label)}:",
                                                     color = Color.Gray,
-                                                    style = MaterialTheme.typography.titleSmall,
+                                                    style = MaterialTheme.typography.titleMedium,
                                                     fontWeight = FontWeight.Bold
                                                 )
-                                                Spacer(modifier = Modifier.width(20.dp))
+                                                Spacer(modifier = Modifier.width(12.dp))
                                                 Text(
                                                     text = nextEpg.title,
                                                     color = Color.Gray.copy(alpha = 0.8f),
-                                                    style = MaterialTheme.typography.titleSmall,
+                                                    style = MaterialTheme.typography.titleMedium,
                                                     maxLines = 1,
                                                     overflow = TextOverflow.Ellipsis
                                                 )
@@ -1063,6 +1063,22 @@ fun MainScreen(
         }
 
         // Overlays
+        if (showSearchOverlay) {
+            SearchOverlay(
+                viewModel = viewModel,
+                onClose = { showSearchOverlay = false },
+                onPlayVod = { movie ->
+                    focusedMovie = movie
+                    viewModel.loadVodInfo(movie)
+                    showMovieDetails = true
+                },
+                onOpenSeries = { series ->
+                    viewModel.loadSeriesDetails(series)
+                    showSeriesDetails = true
+                }
+            )
+        }
+
         if (showMovieDetails && focusedMovie != null) {
             MovieDetailsOverlay(
                 movie = focusedMovie!!,
@@ -1073,6 +1089,7 @@ fun MainScreen(
                     viewModel.playVod(focusedMovie!!, fromStart = !resume, skipResumeDialog = true)
                     showMovieDetails = false
                     showChannelList = false
+                    showSearchOverlay = false // Close search when actually starting playback
                 }
             )
         }
@@ -1086,24 +1103,7 @@ fun MainScreen(
                     viewModel.playEpisode(episode)
                     showSeriesDetails = false
                     showChannelList = false
-                }
-            )
-        }
-
-        if (showSearchOverlay) {
-            SearchOverlay(
-                viewModel = viewModel,
-                onClose = { showSearchOverlay = false },
-                onPlayVod = { movie ->
-                    focusedMovie = movie
-                    viewModel.loadVodInfo(movie)
-                    showMovieDetails = true
-                    showSearchOverlay = false
-                },
-                onOpenSeries = { series ->
-                    viewModel.loadSeriesDetails(series)
-                    showSeriesDetails = true
-                    showSearchOverlay = false
+                    showSearchOverlay = false // Close search when actually starting playback
                 }
             )
         }
