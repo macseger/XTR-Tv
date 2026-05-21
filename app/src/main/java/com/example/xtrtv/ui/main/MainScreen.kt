@@ -137,6 +137,7 @@ fun MainScreen(
     val playbackFocusRequester = remember { FocusRequester() }
     val recentChannelsFocusRequester = remember { FocusRequester() }
     val channelEpgFocusRequester = remember { FocusRequester() }
+    val searchFocusRequester = remember { FocusRequester() }
 
     val playingIndex = remember(viewModel.channels, viewModel.currentChannel) {
         viewModel.channels.indexOfFirst { it.streamId == viewModel.currentChannel?.streamId }
@@ -188,11 +189,19 @@ fun MainScreen(
     }
 
     LaunchedEffect(showMovieDetails, showSeriesDetails, showSearchOverlay) {
-        if (!showMovieDetails && !showSeriesDetails && !showSearchOverlay && showChannelList) {
-            try {
-                contentFocusRequester.requestFocus()
-            } catch (e: Exception) {
-                railFocusRequester.requestFocus()
+        if (!showMovieDetails && !showSeriesDetails) {
+            if (showSearchOverlay) {
+                try {
+                    searchFocusRequester.requestFocus()
+                } catch (e: Exception) {
+                    Log.e("MainScreen", "Failed to refocus search", e)
+                }
+            } else if (showChannelList) {
+                try {
+                    contentFocusRequester.requestFocus()
+                } catch (e: Exception) {
+                    railFocusRequester.requestFocus()
+                }
             }
         }
     }
@@ -1075,7 +1084,8 @@ fun MainScreen(
                 onOpenSeries = { series ->
                     viewModel.loadSeriesDetails(series)
                     showSeriesDetails = true
-                }
+                },
+                focusRequester = searchFocusRequester
             )
         }
 

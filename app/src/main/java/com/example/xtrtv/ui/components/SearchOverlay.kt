@@ -21,6 +21,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -41,9 +42,9 @@ fun SearchOverlay(
     viewModel: MainViewModel,
     onClose: () -> Unit,
     onPlayVod: (com.example.xtrtv.api.VodMovie) -> Unit,
-    onOpenSeries: (com.example.xtrtv.api.Series) -> Unit
+    onOpenSeries: (com.example.xtrtv.api.Series) -> Unit,
+    focusRequester: FocusRequester = remember { FocusRequester() }
 ) {
-    val focusRequester = remember { FocusRequester() }
     val resultsFocusRequester = remember { FocusRequester() }
 
     LaunchedEffect(Unit) {
