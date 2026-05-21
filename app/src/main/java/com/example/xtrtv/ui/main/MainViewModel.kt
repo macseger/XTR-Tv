@@ -73,8 +73,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     var lastEpgUpdate by mutableStateOf<Long?>(null)
         private set
 
-    private var channelIdMap = emptyMap<String, String>()
-    private var normalizedChannelIdMap = emptyMap<String, String>()
+    @Volatile private var channelIdMap = emptyMap<String, String>()
+    @Volatile private var normalizedChannelIdMap = emptyMap<String, String>()
     private val epgMappingMutex = Mutex()
 
     private fun updateChannelMappings(newMap: Map<String, String>) {
@@ -185,10 +185,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     val catResp = apiService.getLiveCategories(data.username, data.password)
                     if (catResp.isSuccessful) {
                         val apiCategories = catResp.body() ?: emptyList()
+                        val mappedCategories = withContext(Dispatchers.Default) {
+                            apiCategories.map { Category(it.id, cleanCategoryName(it.name), "live") }
+                        }
                         withContext(Dispatchers.IO) {
                             dao.insertCategories(apiCategories.map { CategoryEntity(it.id, it.name, "live") })
                         }
-                        categories = apiCategories.map { Category(it.id, cleanCategoryName(it.name), "live") }
+                        categories = mappedCategories
                         
                         if (categories.isNotEmpty()) {
                             val firstCat = categories.first()
@@ -201,7 +204,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                                         StreamEntity(it.streamId, it.name, it.streamIcon, it.categoryId, it.num, it.epgChannelId)
                                     })
                                 }
-                                channels = apiStreams.sortedBy { it.num ?: it.streamId }
+                                val sortedStreams = withContext(Dispatchers.Default) {
+                                    apiStreams.sortedBy { it.num ?: it.streamId }
+                                }
+                                channels = sortedStreams
                                 if (currentChannel == null && channels.isNotEmpty()) playChannel(channels.first())
                             }
                         }
@@ -317,31 +323,37 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val vodResp = apiService.getVodStreams(data.username, data.password)
                 if (vodResp.isSuccessful) {
                     val movies = vodResp.body() ?: emptyList()
-                    val chunks = movies.chunked(100)
-                    chunks.forEachIndexed { index, chunk ->
-                        backgroundSyncMessage = "Syncing VOD: ${((index + 1) * 100 * 100 / movies.size).coerceAtMost(100)}%"
-                        dao.insertVod(chunk.map { 
-                            VodEntity(
-                                it.streamId, it.name, it.streamIcon, it.categoryId ?: "0", 
-                                it.rating, it.containerExtension, it.added,
-                                it.plot, it.cast, it.director, it.genre, it.releaseDate
-                            )
-                        })
-                        kotlinx.coroutines.delay(200)
+                    if (movies.isNotEmpty()) {
+                        val chunks = movies.chunked(100)
+                        chunks.forEachIndexed { index, chunk ->
+                            val progress = ((index + 1) * 100 / chunks.size).coerceAtMost(100)
+                            backgroundSyncMessage = "Syncing VOD: $progress%"
+                            dao.insertVod(chunk.map { 
+                                VodEntity(
+                                    it.streamId, it.name, it.streamIcon, it.categoryId ?: "0", 
+                                    it.rating, it.containerExtension, it.added,
+                                    it.plot, it.cast, it.director, it.genre, it.releaseDate
+                                )
+                            })
+                            kotlinx.coroutines.delay(200)
+                        }
                     }
                 }
 
                 // Throttled Series Sync
                 val seriesResp = apiService.getSeries(data.username, data.password)
                 if (seriesResp.isSuccessful) {
-                    val seriesList = seriesResp.body() ?: emptyList()
-                    val chunks = seriesList.chunked(100)
-                    chunks.forEachIndexed { index, chunk ->
-                        backgroundSyncMessage = "Syncing Series: ${((index + 1) * 100 * 100 / seriesList.size).coerceAtMost(100)}%"
-                        dao.insertSeries(chunk.map { 
-                            SeriesEntity(it.seriesId, it.name, it.cover, it.categoryId ?: "0", it.rating, it.plot, it.genre, it.releaseDate)
-                        })
-                        kotlinx.coroutines.delay(200)
+                    val apiSeriesList = seriesResp.body() ?: emptyList()
+                    if (apiSeriesList.isNotEmpty()) {
+                        val chunks = apiSeriesList.chunked(100)
+                        chunks.forEachIndexed { index, chunk ->
+                            val progress = ((index + 1) * 100 / chunks.size).coerceAtMost(100)
+                            backgroundSyncMessage = "Syncing Series: $progress%"
+                            dao.insertSeries(chunk.map { 
+                                SeriesEntity(it.seriesId, it.name, it.cover, it.categoryId ?: "0", it.rating, it.plot, it.genre, it.releaseDate)
+                            })
+                            kotlinx.coroutines.delay(200)
+                        }
                     }
                 }
 
@@ -380,8 +392,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             .setBufferDurationsMs(
                 30_000, // Min buffer
                 60_000, // Max buffer
-                2_500,  // Buffer for playback
-                5_000   // Buffer for rebuffering
+                5_000,  // Buffer for playback
+                10_000   // Buffer for rebuffering
             )
             .setPrioritizeTimeOverSizeThresholds(true)
             .setBackBuffer(10_000, true)
@@ -568,9 +580,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private suspend fun syncAllContent(force: Boolean = false) {
-    }
-
-    private fun fetchAllContentForSearch() {
+        // Future implementation: Full sync of all content for offline search
     }
 
     fun forceUpdateChannels() {
@@ -654,16 +664,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             dao.insertEpgData(batch)
                         }
 
-                        updateChannelMappings(result.channelMap)
-                        Log.d(TAG, "Parsed $totalParsed EPG items, saved to DB in batches")
-                        
-                        // Save mappings to DB for next restart
-                        val mappingEntities = result.channelMap.map { 
-                            ChannelMappingEntity(it.key, it.value) 
+                        withContext(Dispatchers.Main) {
+                            updateChannelMappings(result.channelMap)
+                            // Save mappings to DB for next restart
+                            val mappingEntities = result.channelMap.map { 
+                                ChannelMappingEntity(it.key, it.value) 
+                            }
+                            withContext(Dispatchers.IO) {
+                                mappingEntities.chunked(500).forEach { dao.insertMappings(it) }
+                            }
+                            lastEpgUpdate = System.currentTimeMillis()
+                            refreshEpgMap()
                         }
-                        mappingEntities.chunked(500).forEach { dao.insertMappings(it) }
-                        lastEpgUpdate = System.currentTimeMillis()
-                        refreshEpgMap()
                     }
                 } else {
                     Log.e(TAG, "EPG Download failed: ${response.code()}")
@@ -672,7 +684,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 Log.e(TAG, "Error fetching EPG", e)
                 e.printStackTrace()
             } finally {
-                isEpgUpdating = false
+                withContext(Dispatchers.Main) {
+                    isEpgUpdating = false
+                }
             }
         }
     }
@@ -706,10 +720,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     allCandidateIds.addAll(uniqueCandidates)
                 }
 
-                // 2. Fetch all upcoming programs for these IDs
+                // 2. Fetch all upcoming programs for these IDs in chunks to avoid SQLite parameter limit
                 val programs = if (allCandidateIds.isNotEmpty()) {
                     withContext(Dispatchers.IO) {
-                        dao.getUpcomingEpgForChannels(allCandidateIds.toList(), currentTimeMs)
+                        allCandidateIds.toList().chunked(500).flatMap { chunk ->
+                            dao.getUpcomingEpgForChannels(chunk, currentTimeMs)
+                        }
                     }
                 } else {
                     emptyList()
@@ -833,7 +849,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     )
                     playChannel(stream)
                 } else {
-                    Log.d(TAG, "Last channel entity not found, falling back to first available if in LIVE mode")
+                    Log.d(TAG, "Last channel not found, falling back to first available")
+                    if (channels.isNotEmpty()) {
+                        playChannel(channels.first())
+                    }
                 }
             }
         }
@@ -1216,9 +1235,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     }
                     
                     if (history != null && details?.episodes != null) {
-                        // Find matching episode in the episodes map
-                        val foundEpisode = details.episodes.values.flatten().find { 
-                            it.id?.toIntOrNull() == history.streamId 
+                        // Find matching episode in the episodes map in background
+                        val foundEpisode = withContext(Dispatchers.Default) {
+                            details.episodes.values.flatten().find { 
+                                it.id?.toIntOrNull() == history.streamId 
+                            }
                         }
                         lastWatchedEpisode = foundEpisode
                     }
@@ -1517,6 +1538,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    private var searchJob: kotlinx.coroutines.Job? = null
     fun performSearch(query: String) {
         searchQuery = query
         if (query.length < 2) {
@@ -1526,7 +1548,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
 
-        viewModelScope.launch(Dispatchers.IO) {
+        searchJob?.cancel()
+        searchJob = viewModelScope.launch(Dispatchers.IO) {
+            kotlinx.coroutines.delay(300) // Debounce search
             val lowerQuery = query.lowercase()
             
             // Search in VOD
