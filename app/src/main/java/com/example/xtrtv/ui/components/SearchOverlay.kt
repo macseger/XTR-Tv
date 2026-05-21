@@ -23,11 +23,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.*
+import coil.compose.AsyncImage
 import com.example.xtrtv.R
 import com.example.xtrtv.ui.main.MainViewModel
 import com.example.xtrtv.ui.theme.Turquoise
@@ -92,61 +95,69 @@ fun SearchOverlay(
             Spacer(modifier = Modifier.height(32.dp))
 
             if (viewModel.searchQuery.length >= 2) {
-                LazyColumn(
+                Row(
                     modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(24.dp)
+                    horizontalArrangement = Arrangement.spacedBy(32.dp)
                 ) {
-                    if (viewModel.filteredVod.isNotEmpty()) {
-                        item {
-                            Text(stringResource(R.string.movies), style = MaterialTheme.typography.labelLarge, color = Color.Gray)
-                            Spacer(modifier = Modifier.height(16.dp))
-                            LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    // Movies Column
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(R.string.movies).uppercase(),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Turquoise,
+                            letterSpacing = 2.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(bottom = 16.dp)
+                        )
+                        
+                        if (viewModel.filteredVod.isEmpty()) {
+                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Text(stringResource(R.string.no_search_results, ""), color = Color.Gray)
+                            }
+                        } else {
+                            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 itemsIndexed(viewModel.filteredVod) { index, movie ->
-                                    Box(modifier = Modifier.width(150.dp)) {
-                                        VodCard(
-                                            title = movie.name,
-                                            posterUrl = movie.streamIcon,
-                                            rating = movie.rating,
-                                            modifier = if (index == 0) Modifier.focusRequester(resultsFocusRequester) else Modifier,
-                                            onClick = { 
-                                                viewModel.saveSearchQuery(viewModel.searchQuery)
-                                                onPlayVod(movie) 
-                                            }
-                                        )
-                                    }
+                                    SearchListItem(
+                                        title = movie.name,
+                                        imageUrl = movie.streamIcon,
+                                        modifier = if (index == 0) Modifier.focusRequester(resultsFocusRequester) else Modifier,
+                                        onClick = {
+                                            viewModel.saveSearchQuery(viewModel.searchQuery)
+                                            onPlayVod(movie)
+                                        }
+                                    )
                                 }
                             }
                         }
                     }
 
-                    if (viewModel.filteredSeries.isNotEmpty()) {
-                        item {
-                            Text(stringResource(R.string.series), style = MaterialTheme.typography.labelLarge, color = Color.Gray)
-                            Spacer(modifier = Modifier.height(16.dp))
-                            LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    // Series Column
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(R.string.series).uppercase(),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Turquoise,
+                            letterSpacing = 2.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(bottom = 16.dp)
+                        )
+
+                        if (viewModel.filteredSeries.isEmpty()) {
+                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Text(stringResource(R.string.no_search_results, ""), color = Color.Gray)
+                            }
+                        } else {
+                            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 itemsIndexed(viewModel.filteredSeries) { index, series ->
-                                    val isFirstResult = viewModel.filteredVod.isEmpty() && index == 0
-                                    Box(modifier = Modifier.width(150.dp)) {
-                                        VodCard(
-                                            title = series.name,
-                                            posterUrl = series.cover,
-                                            rating = series.rating,
-                                            modifier = if (isFirstResult) Modifier.focusRequester(resultsFocusRequester) else Modifier,
-                                            onClick = { 
-                                                viewModel.saveSearchQuery(viewModel.searchQuery)
-                                                onOpenSeries(series) 
-                                            }
-                                        )
-                                    }
+                                    SearchListItem(
+                                        title = series.name,
+                                        imageUrl = series.cover,
+                                        onClick = {
+                                            viewModel.saveSearchQuery(viewModel.searchQuery)
+                                            onOpenSeries(series)
+                                        }
+                                    )
                                 }
-                            }
-                        }
-                    }
-
-                    if (viewModel.filteredVod.isEmpty() && viewModel.filteredSeries.isEmpty()) {
-                        item {
-                            Box(modifier = Modifier.fillMaxWidth().padding(top = 100.dp), contentAlignment = Alignment.Center) {
-                                Text(stringResource(R.string.no_search_results, viewModel.searchQuery), color = Color.Gray)
                             }
                         }
                     }
@@ -208,6 +219,50 @@ fun SearchOverlay(
                     }
                 }
             }
+        }
+    }
+}
+
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+fun SearchListItem(
+    title: String,
+    imageUrl: String?,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        modifier = modifier.fillMaxWidth(),
+        colors = ClickableSurfaceDefaults.colors(
+            containerColor = Color.White.copy(alpha = 0.05f),
+            focusedContainerColor = Color.White,
+            contentColor = Color.White,
+            focusedContentColor = Color.Black
+        ),
+        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(8.dp)),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.02f)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            AsyncImage(
+                model = imageUrl,
+                contentDescription = null,
+                modifier = Modifier
+                    .size(width = 60.dp, height = 34.dp)
+                    .background(Color.Black.copy(alpha = 0.2f), RoundedCornerShape(4.dp)),
+                contentScale = ContentScale.Crop
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }
