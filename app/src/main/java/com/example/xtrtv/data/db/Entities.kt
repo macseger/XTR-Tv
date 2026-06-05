@@ -77,6 +77,7 @@ data class PlaybackHistoryEntity(
     val type: String, // "vod" or "series"
     val position: Long,
     val duration: Long,
+    val containerExtension: String? = null,
     val seriesId: Int? = null,
     val lastWatched: Long = System.currentTimeMillis(),
     val plot: String? = null,

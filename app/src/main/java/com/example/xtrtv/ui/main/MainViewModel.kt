@@ -878,7 +878,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         if (category.id == "history") {
                             vodMovies = withContext(Dispatchers.IO) {
                                 dao.getHistoryByType("vod").map {
-                                    VodMovie(it.streamId, it.name, it.streamIcon, it.categoryId, it.rating, null, null, it.plot, null, null, it.genre, it.releaseDate)
+                                    VodMovie(
+                                        streamId = it.streamId,
+                                        name = it.name,
+                                        streamIcon = it.streamIcon,
+                                        categoryId = it.categoryId,
+                                        rating = it.rating,
+                                        added = null,
+                                        containerExtension = it.containerExtension,
+                                        plot = it.plot,
+                                        cast = null,
+                                        director = null,
+                                        genre = it.genre,
+                                        releaseDate = it.releaseDate
+                                    )
                                 }
                             }
                         } else {
@@ -894,7 +907,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         if (category.id == "history") {
                             seriesList = withContext(Dispatchers.IO) {
                                 dao.getHistoryByType("series").distinctBy { it.seriesId ?: it.streamId }.map {
-                                    Series(it.seriesId ?: it.streamId, it.name, it.streamIcon, it.plot, null, null, it.genre, it.releaseDate, it.rating, it.categoryId)
+                                    Series(
+                                        seriesId = it.seriesId ?: it.streamId,
+                                        name = it.name,
+                                        cover = it.streamIcon,
+                                        plot = it.plot,
+                                        cast = null,
+                                        director = null,
+                                        genre = it.genre,
+                                        releaseDate = it.releaseDate,
+                                        rating = it.rating,
+                                        categoryId = it.categoryId
+                                    )
                                 }
                             }
                         } else {
@@ -1255,7 +1279,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     PlaybackHistoryEntity(
                         streamId = movie.streamId, name = movie.name, streamIcon = movie.streamIcon,
                         categoryId = movie.categoryId, type = if (activePlaybackMode == AppMode.VOD) "vod" else "series",
-                        position = position, duration = duration, seriesId = if (activePlaybackMode == AppMode.SERIES) currentSeriesId else null,
+                        position = position, duration = duration, containerExtension = movie.containerExtension,
+                        seriesId = if (activePlaybackMode == AppMode.SERIES) currentSeriesId else null,
                         plot = movie.plot, genre = movie.genre, releaseDate = movie.releaseDate, rating = movie.rating
                     )
                 )
