@@ -1272,6 +1272,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         player?.let { if (it.isPlaying) it.pause() else it.play() }
     }
 
+    fun pausePlayback() {
+        player?.pause()
+    }
+
     @OptIn(UnstableApi::class)
     fun seekTo(position: Long, smooth: Boolean = false) {
         player?.let {

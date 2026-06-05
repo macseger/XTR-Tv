@@ -52,12 +52,15 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.PlayerView
@@ -113,6 +116,33 @@ fun MainScreen(
     var focusedChannel by remember { mutableStateOf<LiveStream?>(null) }
     var focusedMovie by remember { mutableStateOf<VodMovie?>(null) }
     var focusedSeries by remember { mutableStateOf<Series?>(null) }
+    
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_STOP -> {
+                    viewModel.pausePlayback()
+                }
+                Lifecycle.Event.ON_START -> {
+                    // Om vi är i LIVE-läge och har en kanal vald men den inte spelar, starta om den
+                    if (viewModel.activePlaybackMode == MainViewModel.AppMode.LIVE) {
+                        viewModel.getPlayer()?.let { p ->
+                            if (!p.isPlaying && viewModel.currentChannel != null) {
+                                p.play()
+                            }
+                        }
+                    }
+                }
+                else -> {}
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
     val isAnyOverlayVisible by remember {
         derivedStateOf {
             showChannelList || showMovieDetails || showContextMenu || showPlaybackControls || 
