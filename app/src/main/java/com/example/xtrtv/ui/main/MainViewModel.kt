@@ -381,17 +381,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             .setUserAgent("TiviMate")
             .setAllowCrossProtocolRedirects(true)
 
+        val trackSelector = DefaultTrackSelector(appContext).apply {
+            parameters = buildUponParameters()
+                .setTunnelingEnabled(isTunnelingEnabled)
+                .build()
+        }
+
         player = ExoPlayer.Builder(appContext, renderersFactory)
+            .setTrackSelector(trackSelector)
             .setMediaSourceFactory(DefaultMediaSourceFactory(appContext, extractorsFactory)
                 .setDataSourceFactory(httpDataSourceFactory))
             .setLoadControl(loadControl)
             .setAudioAttributes(audioAttributes, true)
             .setVideoScalingMode(C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING)
             .build().apply {
-            
-            trackSelectionParameters = DefaultTrackSelector.Parameters.Builder(appContext)
-                .setTunnelingEnabled(isTunnelingEnabled)
-                .build()
             
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
                 setVideoChangeFrameRateStrategy(
@@ -1402,6 +1405,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun toggleFrameRateMatching() {
         isFrameRateMatchingEnabled = !isFrameRateMatchingEnabled
         prefs.isFrameRateMatchingEnabled = isFrameRateMatchingEnabled
+        player?.let { p ->
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                p.setVideoChangeFrameRateStrategy(
+                    if (isFrameRateMatchingEnabled) C.VIDEO_CHANGE_FRAME_RATE_STRATEGY_ONLY_IF_SEAMLESS
+                    else C.VIDEO_CHANGE_FRAME_RATE_STRATEGY_OFF
+                )
+            }
+        }
         currentChannel?.let { playChannel(it) }
     }
 
