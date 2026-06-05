@@ -1027,8 +1027,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         currentChannel = null
         
         viewModelScope.launch {
-            player?.stop()
-            player?.clearMediaItems()
+            player?.let { p ->
+                p.stop()
+                p.clearMediaItems()
+                // Force tunneling OFF for VOD as it causes issues on many devices
+                val builder = (p.trackSelectionParameters as? DefaultTrackSelector.Parameters)?.buildUpon()
+                    ?: DefaultTrackSelector.Parameters.Builder(getApplication<Application>().applicationContext)
+                p.trackSelectionParameters = builder.setTunnelingEnabled(false).build()
+            }
             
             val history = withContext(Dispatchers.IO) { dao.getHistoryById(movie.streamId) }
             
@@ -1110,6 +1116,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         viewModelScope.launch {
             try {
+                player?.let { p ->
+                    // Force tunneling OFF for Series as it causes issues on many devices
+                    val builder = (p.trackSelectionParameters as? DefaultTrackSelector.Parameters)?.buildUpon()
+                        ?: DefaultTrackSelector.Parameters.Builder(getApplication<Application>().applicationContext)
+                    p.trackSelectionParameters = builder.setTunnelingEnabled(false).build()
+                }
+
                 val history = withContext(Dispatchers.IO) { dao.getHistoryById(streamId) }
                 if (history != null && history.position > 15_000 && !fromStart && !showResumeDialog) {
                     savedPosition = history.position
@@ -1156,8 +1169,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             loadRecentChannels()
         }
         
-        player?.stop()
-        player?.clearMediaItems()
+        player?.let { p ->
+            p.stop()
+            p.clearMediaItems()
+            // Restore user's tunneling preference for Live TV
+            val builder = (p.trackSelectionParameters as? DefaultTrackSelector.Parameters)?.buildUpon()
+                ?: DefaultTrackSelector.Parameters.Builder(getApplication<Application>().applicationContext)
+            p.trackSelectionParameters = builder.setTunnelingEnabled(isTunnelingEnabled).build()
+        }
         
         val baseUrl = data.url.removeSuffix("/")
         val streamUrl = "$baseUrl/live/${data.username}/${data.password}/${stream.streamId}.ts"
