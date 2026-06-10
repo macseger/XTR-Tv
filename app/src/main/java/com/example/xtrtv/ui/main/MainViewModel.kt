@@ -2,6 +2,7 @@ package com.example.xtrtv.ui.main
 
 import android.app.Application
 import android.util.Log
+import android.view.Surface
 import androidx.annotation.OptIn
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
@@ -190,7 +191,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                                     })
                                 }
                                 channels = apiStreams.sortedBy { it.num ?: it.streamId }
-                                if (currentChannel == null && channels.isNotEmpty()) playChannel(channels.first())
                             }
                         }
                     }
@@ -360,9 +360,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         val loadControl = DefaultLoadControl.Builder()
-            .setBufferDurationsMs(30_000, 60_000, 2_500, 5_000)
+            .setBufferDurationsMs(5_000, 15_000, 1_000, 2_000)
             .setPrioritizeTimeOverSizeThresholds(true)
-            .setBackBuffer(10_000, true)
+            .setBackBuffer(0, false) // Disable back buffer to save RAM, especially for 4K
             .build()
 
         val extractorsFactory = DefaultExtractorsFactory().apply {
@@ -384,6 +384,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val trackSelector = DefaultTrackSelector(appContext).apply {
             parameters = buildUponParameters()
                 .setTunnelingEnabled(isTunnelingEnabled)
+                .setAllowVideoNonSeamlessAdaptiveness(true)
+                .setAllowVideoMixedMimeTypeAdaptiveness(true)
                 .build()
         }
 
@@ -393,12 +395,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 .setDataSourceFactory(httpDataSourceFactory))
             .setLoadControl(loadControl)
             .setAudioAttributes(audioAttributes, true)
-            .setVideoScalingMode(C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING)
             .build().apply {
             
+            setVideoScalingMode(C.VIDEO_SCALING_MODE_SCALE_TO_FIT)
+
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                @Suppress("WrongConstant")
                 setVideoChangeFrameRateStrategy(
-                    if (isFrameRateMatchingEnabled) C.VIDEO_CHANGE_FRAME_RATE_STRATEGY_ONLY_IF_SEAMLESS
+                    if (isFrameRateMatchingEnabled) Surface.CHANGE_FRAME_RATE_ONLY_IF_SEAMLESS
                     else C.VIDEO_CHANGE_FRAME_RATE_STRATEGY_OFF
                 )
             }
@@ -866,12 +870,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         if (cachedStreams.isNotEmpty() && !forceRefresh) {
                             channels = cachedStreams.sortedBy { it.num ?: it.streamId }
                             refreshEpgMap()
-                            if (currentChannel == null && channels.isNotEmpty()) {
-                                val lastId = prefs.lastChannelId
-                                val lastChannel = channels.find { it.streamId == lastId }
-                                if (lastChannel != null) playChannel(lastChannel)
-                                else if (category.id != "history") playChannel(channels.first())
-                            }
                         } else fetchLiveStreams(category.id)
                     }
                     AppMode.VOD -> {
@@ -1177,6 +1175,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun playChannel(stream: LiveStream) {
         if (currentChannel?.streamId == stream.streamId && player?.playbackState != Player.STATE_IDLE) return
         val data = userData ?: return
+        
+        // Hard stop and clear to release hardware resources before starting new one
+        player?.let { p ->
+            p.stop()
+            p.clearMediaItems()
+            // Reset frame rate matching to OFF temporarily during transition
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                @Suppress("WrongConstant")
+                p.setVideoChangeFrameRateStrategy(C.VIDEO_CHANGE_FRAME_RATE_STRATEGY_OFF)
+            }
+        }
+
         currentChannel = stream
         activePlaybackMode = AppMode.LIVE
         currentSeriesId = null
@@ -1194,12 +1204,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         
         player?.let { p ->
-            p.stop()
-            p.clearMediaItems()
-            // Restore user's tunneling preference for Live TV
+            // Re-apply current preferences
             val builder = (p.trackSelectionParameters as? DefaultTrackSelector.Parameters)?.buildUpon()
                 ?: DefaultTrackSelector.Parameters.Builder(getApplication<Application>().applicationContext)
-            p.trackSelectionParameters = builder.setTunnelingEnabled(isTunnelingEnabled).build()
+            
+            p.trackSelectionParameters = builder
+                .setTunnelingEnabled(isTunnelingEnabled)
+                .build()
+            
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                @Suppress("WrongConstant")
+                p.setVideoChangeFrameRateStrategy(
+                    if (isFrameRateMatchingEnabled) Surface.CHANGE_FRAME_RATE_ONLY_IF_SEAMLESS
+                    else C.VIDEO_CHANGE_FRAME_RATE_STRATEGY_OFF
+                )
+            }
         }
         
         val baseUrl = data.url.removeSuffix("/")
@@ -1455,8 +1474,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         prefs.isFrameRateMatchingEnabled = isFrameRateMatchingEnabled
         player?.let { p ->
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                @Suppress("WrongConstant")
                 p.setVideoChangeFrameRateStrategy(
-                    if (isFrameRateMatchingEnabled) C.VIDEO_CHANGE_FRAME_RATE_STRATEGY_ONLY_IF_SEAMLESS
+                    if (isFrameRateMatchingEnabled) Surface.CHANGE_FRAME_RATE_ONLY_IF_SEAMLESS
                     else C.VIDEO_CHANGE_FRAME_RATE_STRATEGY_OFF
                 )
             }
