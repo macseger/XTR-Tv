@@ -578,10 +578,14 @@ fun MainScreen(
                         @OptIn(UnstableApi::class)
                         useController = false
                         this.player = player
+                        keepScreenOn = true
                         focusable = android.view.View.NOT_FOCUSABLE
                         descendantFocusability = android.view.ViewGroup.FOCUS_BLOCK_DESCENDANTS
                         artworkDisplayMode = PlayerView.ARTWORK_DISPLAY_MODE_OFF
                     }
+                },
+                update = { view ->
+                    view.keepScreenOn = viewModel.isPlaying
                 },
                 modifier = Modifier
                     .fillMaxSize()
