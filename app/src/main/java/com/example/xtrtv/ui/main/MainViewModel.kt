@@ -277,6 +277,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
                 val epgUpdateStr = getApplication<Application>().getString(R.string.updating_epg)
                 withContext(Dispatchers.Main) { backgroundSyncMessage = epgUpdateStr }
+                
+                // Cleanup old EPG before fetching new to keep DB size manageable
+                val now = System.currentTimeMillis()
+                dao.deleteOldEpg(now - (24 * 3600 * 1000))
+                
                 fetchEpgFromApi()
 
                 withContext(Dispatchers.Main) { backgroundSyncMessage = "Syncing Categories..." }
@@ -479,8 +484,28 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         
         viewModelScope.launch {
+            var lastEpgRefreshTime = System.currentTimeMillis()
+            var lastSyncCheckTime = System.currentTimeMillis()
             while (true) {
-                currentTime = System.currentTimeMillis()
+                val now = System.currentTimeMillis()
+                currentTime = now
+                
+                // Refresh EPG maps every 60 seconds to ensure current/next programs stay up to date
+                if (now - lastEpgRefreshTime >= 60_000L) {
+                    if (currentMode == AppMode.LIVE && channels.isNotEmpty()) {
+                        refreshEpgMap()
+                    }
+                    lastEpgRefreshTime = now
+                }
+                
+                // Check if background sync is needed every 30 minutes if app stays open
+                if (now - lastSyncCheckTime >= 1800_000L) {
+                    if (isSyncNeeded() && !isBackgroundSyncing) {
+                        startGentleBackgroundSync()
+                    }
+                    lastSyncCheckTime = now
+                }
+                
                 delay(1000)
             }
         }
@@ -589,9 +614,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private fun fetchEpgFromApi() {
+    private suspend fun fetchEpgFromApi() {
         val data = userData ?: return
-        viewModelScope.launch(Dispatchers.IO) {
+        withContext(Dispatchers.Main) { isEpgUpdating = true }
+        withContext(Dispatchers.IO) {
             try {
                 val epgUrl = when {
                     useInternalSwedishEpg -> "https://iptv-epg.org/files/epg-se.xml"
@@ -663,9 +689,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
 
                 val programs = if (allCandidateIds.isNotEmpty()) {
+                    val windowEnd = currentTimeMs + (6 * 3600 * 1000) // Optimal window to find current and next program
                     withContext(Dispatchers.IO) {
                         allCandidateIds.toList().chunked(500).flatMap { chunk ->
-                            dao.getUpcomingEpgForChannels(chunk, currentTimeMs)
+                            dao.getUpcomingEpgForChannels(chunk, currentTimeMs, windowEnd)
                         }
                     }
                 } else emptyList()
@@ -1317,9 +1344,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 normalizedChannelIdMap[normalizeName(stream.name)]?.let { candidates.add(it) }
                 
                 val epgId = candidates.distinct().firstOrNull()
+                val now = System.currentTimeMillis()
                 val epg = if (epgId != null) {
-                    val now = System.currentTimeMillis()
-                    dao.getEpgForChannel(epgId, now - 3600_000).filter { it.start < now + (12 * 3600 * 1000) }
+                    dao.getEpgForChannel(epgId, now - 3600_000, now + (12 * 3600 * 1000))
                 } else emptyList()
                 
                 withContext(Dispatchers.Main) { channelEpgList = epg }

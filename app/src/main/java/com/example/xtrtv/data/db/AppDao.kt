@@ -31,11 +31,11 @@ interface AppDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSeries(series: List<SeriesEntity>)
 
-    @Query("SELECT * FROM epg_data WHERE channelId = :channelId AND stop > :currentTime ORDER BY start ASC")
-    suspend fun getEpgForChannel(channelId: String, currentTime: Long): List<EpgEntity>
+    @Query("SELECT * FROM epg_data WHERE channelId = :channelId AND stop > :currentTime AND start < :endTime ORDER BY start ASC")
+    suspend fun getEpgForChannel(channelId: String, currentTime: Long, endTime: Long): List<EpgEntity>
 
-    @Query("SELECT * FROM epg_data WHERE channelId IN (:channelIds) AND stop > :currentTime ORDER BY start ASC")
-    suspend fun getUpcomingEpgForChannels(channelIds: List<String>, currentTime: Long): List<EpgEntity>
+    @Query("SELECT * FROM epg_data WHERE channelId IN (:channelIds) AND stop > :currentTime AND start < :endTime ORDER BY start ASC")
+    suspend fun getUpcomingEpgForChannels(channelIds: List<String>, currentTime: Long, endTime: Long): List<EpgEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertEpgData(epgList: List<EpgEntity>)
