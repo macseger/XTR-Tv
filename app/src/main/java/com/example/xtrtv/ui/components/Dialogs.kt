@@ -3,6 +3,7 @@ package com.example.xtrtv.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -719,6 +720,8 @@ fun HiddenCategoriesOverlay(
     onRestore: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val firstItemFocusRequester = remember { FocusRequester() }
+    
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -755,7 +758,7 @@ fun HiddenCategoriesOverlay(
                     modifier = Modifier.weight(1f, fill = false),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(categories) { category ->
+                    itemsIndexed(categories) { index, category ->
                         Surface(
                             onClick = { onRestore(category.id) },
                             colors = ClickableSurfaceDefaults.colors(
@@ -765,7 +768,9 @@ fun HiddenCategoriesOverlay(
                                 focusedContentColor = Color.Black
                             ),
                             shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(8.dp)),
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .then(if (index == 0) Modifier.focusRequester(firstItemFocusRequester) else Modifier)
                         ) {
                             Row(
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
@@ -803,6 +808,13 @@ fun HiddenCategoriesOverlay(
                     modifier = Modifier.padding(horizontal = 32.dp, vertical = 12.dp)
                 )
             }
+        }
+    }
+
+    LaunchedEffect(categories) {
+        if (categories.isNotEmpty()) {
+            kotlinx.coroutines.delay(100)
+            firstItemFocusRequester.requestFocus()
         }
     }
 }

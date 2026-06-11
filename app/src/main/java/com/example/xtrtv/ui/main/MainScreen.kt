@@ -107,6 +107,7 @@ fun MainScreen(
     var showHideCategoryDialog by remember { mutableStateOf(false) }
     var categoryToHide by remember { mutableStateOf<Category?>(null) }
     var showHiddenCategoriesDialog by remember { mutableStateOf(false) }
+    var longPressJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     var lastInteractionTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var focusContentTrigger by remember { mutableIntStateOf(0) }
     var focusCategoryTrigger by remember { mutableIntStateOf(0) }
@@ -822,9 +823,11 @@ fun MainScreen(
                                 val isSelected = viewModel.selectedCategory?.id == category.id
                                 Surface(
                                     onClick = { 
-                                        viewModel.selectCategory(category)
-                                        focusPlayingNow = false
-                                        focusContentTrigger++
+                                        if (longPressJob == null) {
+                                            viewModel.selectCategory(category)
+                                            focusPlayingNow = false
+                                            focusContentTrigger++
+                                        }
                                     },
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -834,23 +837,39 @@ fun MainScreen(
                                                 viewModel.selectCategory(category)
                                             }
                                         }
+                                        .onKeyEvent { event ->
+                                            val isConfirmKey = event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_CENTER ||
+                                                              event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_ENTER
+                                            val isMenuKey = event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_MENU
+
+                                            if (isConfirmKey) {
+                                                if (event.type == KeyEventType.KeyDown) {
+                                                    if (longPressJob == null) {
+                                                        longPressJob = scope.launch {
+                                                            kotlinx.coroutines.delay(800)
+                                                            categoryToHide = category
+                                                            showHideCategoryDialog = true
+                                                        }
+                                                    }
+                                                } else if (event.type == KeyEventType.KeyUp) {
+                                                    val wasLongPress = longPressJob?.isActive == false && longPressJob != null
+                                                    longPressJob?.cancel()
+                                                    longPressJob = null
+                                                    if (wasLongPress) return@onKeyEvent true
+                                                }
+                                            } else if (isMenuKey && event.type == KeyEventType.KeyUp) {
+                                                categoryToHide = category
+                                                showHideCategoryDialog = true
+                                                return@onKeyEvent true
+                                            }
+                                            false
+                                        }
                                         .focusProperties {
                                             exit = { dir ->
                                                 if (dir == FocusDirection.Right) contentFocusRequester
                                                 else if (dir == FocusDirection.Left) railFocusRequester
                                                 else FocusRequester.Default
                                             }
-                                        }
-                                        .onKeyEvent { event ->
-                                            if (event.type == KeyEventType.KeyDown && 
-                                                (event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_CENTER ||
-                                                 event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_ENTER)) {
-                                                if (event.nativeKeyEvent.isLongPress) {
-                                                    categoryToHide = category
-                                                    showHideCategoryDialog = true
-                                                    true
-                                                } else false
-                                            } else false
                                         }
                                         .then(if (isSelected) Modifier.focusRequester(categoryFocusRequester) else Modifier),
                                     colors = ClickableSurfaceDefaults.colors(
@@ -1616,10 +1635,18 @@ fun MainScreen(
                     viewModel.hideCategory(categoryToHide!!)
                     showHideCategoryDialog = false
                     categoryToHide = null
+                    scope.launch {
+                        kotlinx.coroutines.delay(100)
+                        categoryFocusRequester.requestFocus()
+                    }
                 },
                 onDismiss = {
                     showHideCategoryDialog = false
                     categoryToHide = null
+                    scope.launch {
+                        kotlinx.coroutines.delay(100)
+                        categoryFocusRequester.requestFocus()
+                    }
                 }
             )
         }
