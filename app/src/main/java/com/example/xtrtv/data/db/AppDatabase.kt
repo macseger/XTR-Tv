@@ -14,9 +14,10 @@ import androidx.room.RoomDatabase
         VodEntity::class,
         SeriesEntity::class,
         PlaybackHistoryEntity::class,
-        SearchHistoryEntity::class
+        SearchHistoryEntity::class,
+        HiddenCategoryEntity::class
     ], 
-    version = 15,
+    version = 16,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

@@ -104,6 +104,9 @@ fun MainScreen(
     var showAboutDialog by remember { mutableStateOf(false) }
     var showRecentChannels by remember { mutableStateOf(false) }
     var showChannelEpg by remember { mutableStateOf(false) }
+    var showHideCategoryDialog by remember { mutableStateOf(false) }
+    var categoryToHide by remember { mutableStateOf<Category?>(null) }
+    var showHiddenCategoriesDialog by remember { mutableStateOf(false) }
     var lastInteractionTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var focusContentTrigger by remember { mutableIntStateOf(0) }
     var focusCategoryTrigger by remember { mutableIntStateOf(0) }
@@ -149,7 +152,7 @@ fun MainScreen(
             showSeriesDetails || showSearchOverlay || showExitDialog || 
             showLogoutDialog || showUrlDialog || viewModel.showResumeDialog ||
             showAudioMenu || viewModel.showNextEpisodeDialog || showRecentChannels ||
-            showChannelEpg || showAboutDialog
+            showChannelEpg || showAboutDialog || showHideCategoryDialog || showHiddenCategoriesDialog
         }
     }
     
@@ -329,7 +332,7 @@ fun MainScreen(
         }
 
         // För övriga menyer (inkl. kanallistan) -> Stäng ALLT direkt
-        if (showChannelList || showContextMenu || showPlaybackControls || showRecentChannels || showChannelEpg) {
+        if (showChannelList || showContextMenu || showPlaybackControls || showRecentChannels || showChannelEpg || showHideCategoryDialog || showHiddenCategoriesDialog) {
             showChannelList = false
             showContextMenu = false
             showSubtitleMenu = false
@@ -339,6 +342,8 @@ fun MainScreen(
             showPlaybackControls = false
             showRecentChannels = false
             showChannelEpg = false
+            showHideCategoryDialog = false
+            showHiddenCategoriesDialog = false
             viewModel.showNextEpisodeDialog = false
             return@BackHandler
         }
@@ -397,6 +402,8 @@ fun MainScreen(
                                 showUrlDialog = false
                                 showLogoutDialog = false
                                 showExitDialog = false
+                                showHideCategoryDialog = false
+                                showHiddenCategoriesDialog = false
                                 viewModel.showResumeDialog = false
                                 viewModel.showNextEpisodeDialog = false
                             }
@@ -833,6 +840,17 @@ fun MainScreen(
                                                 else if (dir == FocusDirection.Left) railFocusRequester
                                                 else FocusRequester.Default
                                             }
+                                        }
+                                        .onKeyEvent { event ->
+                                            if (event.type == KeyEventType.KeyDown && 
+                                                (event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_CENTER ||
+                                                 event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_ENTER)) {
+                                                if (event.nativeKeyEvent.isLongPress) {
+                                                    categoryToHide = category
+                                                    showHideCategoryDialog = true
+                                                    true
+                                                } else false
+                                            } else false
                                         }
                                         .then(if (isSelected) Modifier.focusRequester(categoryFocusRequester) else Modifier),
                                     colors = ClickableSurfaceDefaults.colors(
@@ -1460,6 +1478,17 @@ fun MainScreen(
                             }
                             item {
                                 ContextMenuItem(
+                                    text = stringResource(R.string.show_hidden_categories),
+                                    icon = { Icon(Icons.Default.Visibility, null, modifier = Modifier.size(20.dp)) },
+                                    onClick = {
+                                        viewModel.loadHiddenCategories()
+                                        showHiddenCategoriesDialog = true
+                                        showContextMenu = false
+                                    }
+                                )
+                            }
+                            item {
+                                ContextMenuItem(
                                     text = stringResource(R.string.logout),
                                     icon = { Icon(Icons.AutoMirrored.Filled.Logout, null, modifier = Modifier.size(20.dp)) },
                                     onClick = {
@@ -1577,6 +1606,31 @@ fun MainScreen(
         if (showAboutDialog) {
             AboutAppDialog(
                 onDismiss = { showAboutDialog = false }
+            )
+        }
+
+        if (showHideCategoryDialog && categoryToHide != null) {
+            HideCategoryDialog(
+                categoryName = categoryToHide!!.name,
+                onConfirm = {
+                    viewModel.hideCategory(categoryToHide!!)
+                    showHideCategoryDialog = false
+                    categoryToHide = null
+                },
+                onDismiss = {
+                    showHideCategoryDialog = false
+                    categoryToHide = null
+                }
+            )
+        }
+
+        if (showHiddenCategoriesDialog) {
+            HiddenCategoriesOverlay(
+                categories = viewModel.hiddenCategories,
+                onRestore = { categoryId ->
+                    viewModel.unhideCategory(categoryId)
+                },
+                onDismiss = { showHiddenCategoriesDialog = false }
             )
         }
 

@@ -4,7 +4,7 @@ import androidx.room.*
 
 @Dao
 interface AppDao {
-    @Query("SELECT * FROM categories WHERE type = :type")
+    @Query("SELECT * FROM categories WHERE type = :type AND id NOT IN (SELECT id FROM hidden_categories)")
     suspend fun getCategoriesByType(type: String): List<CategoryEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -72,6 +72,16 @@ interface AppDao {
 
     @Query("SELECT MAX(lastUpdated) FROM epg_data")
     suspend fun getLastUpdatedTime(): Long?
+
+    @Query("SELECT * FROM categories WHERE id IN (SELECT id FROM hidden_categories)")
+    suspend fun getHiddenCategories(): List<CategoryEntity>
+
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun hideCategory(hidden: HiddenCategoryEntity)
+
+    @Query("DELETE FROM hidden_categories WHERE id = :categoryId")
+    suspend fun unhideCategory(categoryId: String)
 
     // Search
     @Query("SELECT * FROM vod_movies WHERE name LIKE :query ORDER BY streamId DESC")

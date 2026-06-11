@@ -10,6 +10,11 @@ data class CategoryEntity(
     val type: String = "live" // "live", "vod", "series"
 )
 
+@Entity(tableName = "hidden_categories")
+data class HiddenCategoryEntity(
+    @PrimaryKey val id: String
+)
+
 @Entity(tableName = "vod_movies", indices = [androidx.room.Index("categoryId")])
 data class VodEntity(
     @PrimaryKey val streamId: Int,

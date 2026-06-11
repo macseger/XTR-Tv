@@ -3,6 +3,7 @@ package com.example.xtrtv.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
@@ -630,3 +631,179 @@ fun AboutAppDialog(
         focusRequester.requestFocus()
     }
 }
+
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+fun HideCategoryDialog(
+    categoryName: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.85f)),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            modifier = Modifier
+                .width(400.dp)
+                .background(Color(0xFF1A1A1A), RoundedCornerShape(16.dp))
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = stringResource(R.string.hide_category_title),
+                style = MaterialTheme.typography.headlineSmall,
+                color = Color.White
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = stringResource(R.string.hide_category_desc, categoryName),
+                style = MaterialTheme.typography.bodyLarge,
+                color = Color.Gray,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(32.dp))
+            
+            val confirmFocusRequester = remember { FocusRequester() }
+            
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Surface(
+                    onClick = onConfirm,
+                    modifier = Modifier.weight(1f).focusRequester(confirmFocusRequester),
+                    colors = ClickableSurfaceDefaults.colors(
+                        containerColor = Turquoise,
+                        contentColor = Color.Black,
+                        focusedContainerColor = Color.White
+                    ),
+                    shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(8.dp))
+                ) {
+                    Text(
+                        text = stringResource(R.string.yes_hide),
+                        modifier = Modifier.padding(12.dp),
+                        textAlign = TextAlign.Center
+                    )
+                }
+                
+                Surface(
+                    onClick = onDismiss,
+                    modifier = Modifier.weight(1f),
+                    colors = ClickableSurfaceDefaults.colors(
+                        containerColor = Color(0xFF333333),
+                        contentColor = Color.White,
+                        focusedContainerColor = Color.White,
+                        focusedContentColor = Color.Black
+                    ),
+                    shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(8.dp))
+                ) {
+                    Text(
+                        text = stringResource(R.string.cancel),
+                        modifier = Modifier.padding(12.dp),
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+            
+            LaunchedEffect(Unit) {
+                confirmFocusRequester.requestFocus()
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+fun HiddenCategoriesOverlay(
+    categories: List<com.example.xtrtv.api.Category>,
+    onRestore: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.9f))
+            .clickable { onDismiss() },
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            modifier = Modifier
+                .width(500.dp)
+                .heightIn(max = 600.dp)
+                .background(Color(0xFF1A1A1A), RoundedCornerShape(24.dp))
+                .padding(32.dp)
+                .clickable(enabled = false) {},
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = stringResource(R.string.hidden_categories_title),
+                style = MaterialTheme.typography.headlineSmall,
+                color = Turquoise,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+            
+            if (categories.isEmpty()) {
+                Text(
+                    text = stringResource(R.string.no_hidden_categories),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = Color.Gray,
+                    modifier = Modifier.padding(vertical = 32.dp)
+                )
+            } else {
+                androidx.compose.foundation.lazy.LazyColumn(
+                    modifier = Modifier.weight(1f, fill = false),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(categories) { category ->
+                        Surface(
+                            onClick = { onRestore(category.id) },
+                            colors = ClickableSurfaceDefaults.colors(
+                                containerColor = Color(0xFF2A2A2A),
+                                focusedContainerColor = Color.White,
+                                contentColor = Color.White,
+                                focusedContentColor = Color.Black
+                            ),
+                            shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(8.dp)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text(category.name, fontWeight = FontWeight.Bold)
+                                    Text(category.type.uppercase(), style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                                }
+                                Text(
+                                    stringResource(R.string.restore),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = Turquoise,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(24.dp))
+            
+            Surface(
+                onClick = onDismiss,
+                colors = ClickableSurfaceDefaults.colors(
+                    containerColor = Color(0xFF333333),
+                    focusedContainerColor = Color.White
+                ),
+                shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(8.dp))
+            ) {
+                Text(
+                    text = stringResource(R.string.close),
+                    modifier = Modifier.padding(horizontal = 32.dp, vertical = 12.dp)
+                )
+            }
+        }
+    }
+}
+

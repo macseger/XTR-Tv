@@ -74,4 +74,11 @@
     <string name="next_label">Nästa</string>
     <string name="about_app">Om denna applikation</string>
     <string name="about_app_desc">Denna applikation är helt gratis, reklamfri och får användas för personligt bruk. Dock tar jag gärna emot gåvor. Du kan kontakta mig på marcus.segerljung@gmail.com eller swisha en liten gåva på 0790-16 15 14 Med vänliga hälsningar/ Marcus. Klicka bakåt för att stänga denna ruta.</string>
+    <string name="hide_category_title">Dölj kategori?</string>
+    <string name="hide_category_desc">Vill du dölja kategorin \"%1$s\"? Den kommer inte längre visas i listorna men kan återställas via menyn.</string>
+    <string name="yes_hide">Ja, dölj</string>
+    <string name="show_hidden_categories">Visa dolda kategorier</string>
+    <string name="hidden_categories_title">Dolda kategorier</string>
+    <string name="restore">Återställ</string>
+    <string name="no_hidden_categories">Inga dolda kategorier</string>
 </resources>

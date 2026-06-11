@@ -142,6 +142,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     var isCheckingUpdate by mutableStateOf(false)
     var latestRelease by mutableStateOf<GithubRelease?>(null)
 
+    var hiddenCategories by mutableStateOf<List<Category>>(emptyList())
     var showNextEpisodeDialog by mutableStateOf(false)
     var nextEpisode: Episode? = null
 
@@ -227,7 +228,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     dao.insertCategories(apiCategories.map { CategoryEntity(it.id, it.name, "live") })
                     
                     if (currentMode == AppMode.LIVE) {
-                        val updatedCats = apiCategories.map { Category(it.id, cleanCategoryName(it.name), "live") }
+                        val updatedCats = dao.getCategoriesByType("live").map { Category(it.id, cleanCategoryName(it.name), "live") }
                         withContext(Dispatchers.Main) { categories = updatedCats }
                     }
 
@@ -270,7 +271,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     val apiCategories = liveCatResp.body() ?: emptyList()
                     dao.insertCategories(apiCategories.map { CategoryEntity(it.id, it.name, "live") })
                     if (currentMode == AppMode.LIVE) {
-                        val updatedCats = apiCategories.map { Category(it.id, cleanCategoryName(it.name), "live") }
+                        val updatedCats = dao.getCategoriesByType("live").map { Category(it.id, cleanCategoryName(it.name), "live") }
                         withContext(Dispatchers.Main) { categories = updatedCats }
                     }
                 }
@@ -588,7 +589,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     }
                     
                     if (currentMode == AppMode.LIVE) {
-                        categories = apiCategories.map { Category(it.id, cleanCategoryName(it.name), "live") }
+                        categories = withContext(Dispatchers.IO) {
+                            dao.getCategoriesByType("live").map { Category(it.id, cleanCategoryName(it.name), "live") }
+                        }
                     }
 
                     val targetCatId = selectedCategory?.id
@@ -847,18 +850,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         AppMode.SERIES -> "series"
                     }
                     val apiCategories = response.body() ?: emptyList()
-                    val finalCategories = apiCategories.map { it.copy(type = type, name = cleanCategoryName(it.name)) }.toMutableList()
+                    withContext(Dispatchers.IO) {
+                        dao.insertCategories(apiCategories.map { CategoryEntity(it.id, it.name, type) })
+                    }
+                    
+                    val visibleCategories = withContext(Dispatchers.IO) {
+                        dao.getCategoriesByType(type).map { Category(it.id, cleanCategoryName(it.name), it.type) }
+                    }.toMutableList()
                     
                     if (currentMode == AppMode.VOD || currentMode == AppMode.SERIES) {
                         val hasHistory = withContext(Dispatchers.IO) { dao.getHistoryByType(type).isNotEmpty() }
                         if (hasHistory) {
-                            finalCategories.add(0, Category("history", getApplication<Application>().getString(R.string.history), type))
+                            visibleCategories.add(0, Category("history", getApplication<Application>().getString(R.string.history), type))
                         }
                     }
-                    categories = finalCategories
-                    withContext(Dispatchers.IO) {
-                        dao.insertCategories(apiCategories.map { CategoryEntity(it.id, it.name, type) })
-                    }
+                    categories = visibleCategories
                     refreshCategoryMaps()
                     if (categories.isNotEmpty()) selectCategory(categories.first(), forceRefresh = true)
                 }
@@ -1530,6 +1536,51 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val history = dao.getHistoryByType("live").take(10)
             val mapped = history.map { LiveStream(it.streamId, it.name, it.streamIcon, it.categoryId ?: "0", null, null) }
             withContext(Dispatchers.Main) { recentChannels = mapped }
+        }
+    }
+
+    fun hideCategory(category: Category) {
+        viewModelScope.launch(Dispatchers.IO) {
+            dao.hideCategory(HiddenCategoryEntity(category.id))
+            withContext(Dispatchers.Main) {
+                // Remove from current categories
+                categories = categories.filter { it.id != category.id }
+                if (selectedCategory?.id == category.id) {
+                    if (categories.isNotEmpty()) selectCategory(categories.first())
+                    else {
+                        selectedCategory = null
+                        channels = emptyList()
+                        vodMovies = emptyList()
+                        seriesList = emptyList()
+                    }
+                }
+            }
+        }
+    }
+
+    fun loadHiddenCategories() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val hidden = dao.getHiddenCategories().map { Category(it.id, it.name, it.type) }
+            withContext(Dispatchers.Main) {
+                hiddenCategories = hidden
+            }
+        }
+    }
+
+    fun unhideCategory(categoryId: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            dao.unhideCategory(categoryId)
+            // Reload categories for current mode to show the unhidden one
+            val type = when(currentMode) {
+                AppMode.LIVE -> "live"
+                AppMode.VOD -> "vod"
+                AppMode.SERIES -> "series"
+            }
+            val cached = dao.getCategoriesByType(type).map { Category(it.id, cleanCategoryName(it.name), it.type) }
+            withContext(Dispatchers.Main) {
+                categories = cached
+                loadHiddenCategories()
+            }
         }
     }
 
