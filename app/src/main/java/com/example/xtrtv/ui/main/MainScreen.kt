@@ -202,11 +202,11 @@ fun MainScreen(
                         channelListState.scrollToItem(playingIndex)
                         contentFocusRequester.requestFocus()
                     } catch (e: Exception) {
-                        railFocusRequester.requestFocus()
+                        categoryFocusRequester.requestFocus()
                     }
                 } else {
-                    // Always start focus on the rail for better TV UX predictability
-                    railFocusRequester.requestFocus()
+                    // Focus on categories instead of the rail for better initial navigation
+                    categoryFocusRequester.requestFocus()
                 }
             }
         }
