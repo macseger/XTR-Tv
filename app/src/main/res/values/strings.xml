@@ -36,6 +36,7 @@
     <string name="yes_logout">Ja, logga ut</string>
     <string name="updating_epg">Uppdaterar EPG…</string>
     <string name="loading">Laddar…</string>
+    <string name="channels">KANALER</string>
     <string name="search_placeholder">Sök efter filmer eller serier…</string>
     <string name="movies">FILMER</string>
     <string name="series">SERIER</string>
@@ -66,7 +67,7 @@
     <string name="custom_epg_title">Egen EPG-källa</string>
     <string name="custom_epg_desc">Ange URL till din XMLTV-fil. Lämna tomt för att använda serverns EPG.</string>
     <string name="epg_url_placeholder">https://example.com/epg.xml</string>
-    <string name="epg_12h">EPG 12 TIMMAR</string>
+    <string name="epg_12h">EPG 24 TIMMAR</string>
     <string name="just_now">JUST NU</string>
     <string name="no_epg_info">Ingen programinformation tillgänglig</string>
     <string name="recent_channels">SENASTE KANALER</string>

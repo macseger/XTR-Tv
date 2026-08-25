@@ -1,5 +1,6 @@
 package com.example.xtrtv.ui.components
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -25,6 +26,7 @@ import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -32,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.*
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.example.xtrtv.R
 import com.example.xtrtv.ui.main.MainViewModel
 import com.example.xtrtv.ui.theme.Turquoise
@@ -50,18 +53,20 @@ fun SearchOverlay(
     LaunchedEffect(Unit) {
         viewModel.loadSearchHistory()
     }
+
+    BackHandler {
+        onClose()
+    }
     
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black.copy(alpha = 0.98f))
-            .clickable { onClose() }
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(40.dp)
-                .clickable(enabled = false) {}
+                .padding(horizontal = 40.dp, vertical = 24.dp)
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -75,7 +80,10 @@ fun SearchOverlay(
                     onValueChange = { viewModel.performSearch(it) },
                     modifier = Modifier
                         .weight(1f)
-                        .focusRequester(focusRequester),
+                        .focusRequester(focusRequester)
+                        .focusProperties {
+                            down = resultsFocusRequester
+                        },
                     placeholder = { Text(stringResource(R.string.search_placeholder), color = Color.Gray) },
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = Turquoise,
@@ -93,12 +101,12 @@ fun SearchOverlay(
                 }
             }
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
             if (viewModel.searchQuery.length >= 2) {
                 Row(
                     modifier = Modifier.fillMaxSize(),
-                    horizontalArrangement = Arrangement.spacedBy(32.dp)
+                    horizontalArrangement = Arrangement.spacedBy(24.dp)
                 ) {
                     // Movies Column
                     Column(modifier = Modifier.weight(1f)) {
@@ -108,18 +116,19 @@ fun SearchOverlay(
                             color = Turquoise,
                             letterSpacing = 2.sp,
                             fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(bottom = 16.dp)
+                            modifier = Modifier.padding(bottom = 12.dp)
                         )
                         
                         if (viewModel.filteredVod.isEmpty()) {
-                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Text(stringResource(R.string.no_search_results, ""), color = Color.Gray)
+                            Box(modifier = Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
+                                Text(stringResource(R.string.no_search_results, ""), color = Color.Gray, fontSize = 12.sp)
                             }
                         } else {
                             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                itemsIndexed(viewModel.filteredVod) { index, movie ->
+                                itemsIndexed(viewModel.filteredVod, key = { _, movie -> "movie_${movie.streamId}" }) { index, movie ->
                                     val categoryName = viewModel.vodCategoryMap[movie.categoryId]
                                     SearchListItem(
+                                        viewModel = viewModel,
                                         title = movie.name,
                                         categoryName = categoryName,
                                         imageUrl = movie.streamIcon,
@@ -142,21 +151,23 @@ fun SearchOverlay(
                             color = Turquoise,
                             letterSpacing = 2.sp,
                             fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(bottom = 16.dp)
+                            modifier = Modifier.padding(bottom = 12.dp)
                         )
 
                         if (viewModel.filteredSeries.isEmpty()) {
-                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Text(stringResource(R.string.no_search_results, ""), color = Color.Gray)
+                            Box(modifier = Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
+                                Text(stringResource(R.string.no_search_results, ""), color = Color.Gray, fontSize = 12.sp)
                             }
                         } else {
                             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                itemsIndexed(viewModel.filteredSeries) { index, series ->
+                                itemsIndexed(viewModel.filteredSeries, key = { _, series -> "series_${series.seriesId}" }) { index, series ->
                                     val categoryName = viewModel.seriesCategoryMap[series.categoryId]
                                     SearchListItem(
+                                        viewModel = viewModel,
                                         title = series.name,
                                         categoryName = categoryName,
                                         imageUrl = series.cover,
+                                        modifier = if (viewModel.filteredVod.isEmpty() && index == 0) Modifier.focusRequester(resultsFocusRequester) else Modifier,
                                         onClick = {
                                             viewModel.saveSearchQuery(viewModel.searchQuery)
                                             onOpenSeries(series)
@@ -181,14 +192,16 @@ fun SearchOverlay(
                         )
                         
                         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            items(viewModel.searchHistory) { query ->
+                            itemsIndexed(viewModel.searchHistory, key = { _, query -> query }) { index, query ->
                                 Surface(
                                     onClick = { 
                                         viewModel.performSearch(query)
                                         // Refocus text field to maintain focus state after UI swap
                                         focusRequester.requestFocus()
                                     },
-                                    modifier = Modifier.fillMaxWidth(),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .then(if (index == 0) Modifier.focusRequester(resultsFocusRequester) else Modifier),
                                     colors = ClickableSurfaceDefaults.colors(
                                         containerColor = Color.White.copy(alpha = 0.05f),
                                         focusedContainerColor = Color.White,
@@ -231,6 +244,7 @@ fun SearchOverlay(
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun SearchListItem(
+    viewModel: MainViewModel,
     title: String,
     imageUrl: String?,
     modifier: Modifier = Modifier,
@@ -253,8 +267,19 @@ fun SearchListItem(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            val localIconResId = remember(title) { viewModel.getLocalResourceIdentifier(title) }
+
             AsyncImage(
-                model = imageUrl,
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(imageUrl)
+                    .apply {
+                        if (localIconResId != 0) {
+                            error(localIconResId)
+                            fallback(localIconResId)
+                        }
+                    }
+                    .crossfade(true)
+                    .build(),
                 contentDescription = null,
                 modifier = Modifier
                     .size(width = 60.dp, height = 34.dp)

@@ -28,9 +28,9 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.itemsIndexed
-import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -1033,122 +1033,25 @@ fun MainScreen(
 
                         // Content List/Grid
                         if (viewModel.currentMode == MainViewModel.AppMode.LIVE) {
-                            val timeFormat = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
-                            LazyColumn(
-                                modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
-                                state = channelListState,
-                                contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 40.dp)
-                            ) {
-                                itemsIndexed(
-                                    items = viewModel.channels,
-                                    key = { _, stream -> stream.streamId }
-                                ) { index, stream ->
-                                    val isPlaying = viewModel.currentChannel?.streamId == stream.streamId
-                                    val epgEntry = viewModel.epgMap[stream.streamId]
-                                    val nextEpg = viewModel.nextEpgMap[stream.streamId]
-                                    val isFocusedTarget = remember(focusedChannel, stream) { focusedChannel?.streamId == stream.streamId }
-
-                                    Surface(
-                                        onClick = { 
-                                            if (!showContextMenu) {
-                                                viewModel.playChannel(stream)
-                                                showChannelList = false
-                                            }
-                                        },
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(vertical = 2.dp)
-                                            .onFocusChanged { if (it.isFocused) focusedChannel = stream }
-                                            .then(
-                                                if (isFocusedTarget || (focusedChannel == null && (if (focusPlayingNow && playingIndex >= 0) index == playingIndex else index == 0))) {
-                                                    Modifier.focusRequester(contentFocusRequester)
-                                                } else Modifier
-                                            ),
-                                        colors = ClickableSurfaceDefaults.colors(
-                                            containerColor = if (isPlaying) Turquoise.copy(alpha = 0.05f) else Color.Transparent,
-                                            focusedContainerColor = Color.White,
-                                            contentColor = if (isPlaying) Turquoise else Color.White,
-                                            focusedContentColor = Color.Black
-                                        ),
-                                        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(8.dp)),
-                                        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.02f)
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp).fillMaxWidth(),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            val context = LocalContext.current
-                                            val normalizedName = remember(stream.name) { viewModel.normalizeName(stream.name) }
-                                            val localIconResId = remember(normalizedName) {
-                                                context.resources.getIdentifier(normalizedName, "drawable", context.packageName)
-                                            }
-                                            
-                                            AsyncImage(
-                                                model = ImageRequest.Builder(LocalContext.current)
-                                                    .data(stream.streamIcon)
-                                                    .apply {
-                                                        if (localIconResId != 0) {
-                                                            error(localIconResId)
-                                                            fallback(localIconResId)
-                                                        }
-                                                    }
-                                                    .crossfade(true)
-                                                    .build(),
-                                                contentDescription = null,
-                                                modifier = Modifier
-                                                    .width(60.dp)
-                                                    .height(34.dp)
-                                                    .background(Color.Black.copy(alpha = 0.2f), RoundedCornerShape(4.dp)),
-                                                contentScale = androidx.compose.ui.layout.ContentScale.Fit
-                                            )
-
-                                            Spacer(modifier = Modifier.width(12.dp))
-
-                                            Column(modifier = Modifier.weight(1f)) {
-                                                Text(
-                                                    text = stream.name,
-                                                    style = MaterialTheme.typography.titleMedium.copy(fontSize = 16.sp),
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis,
-                                                    fontWeight = FontWeight.Bold
-                                                )
-                                                if (epgEntry != null) {
-                                                    Text(
-                                                        text = epgEntry.title,
-                                                        style = MaterialTheme.typography.bodyLarge,
-                                                        maxLines = 1,
-                                                        overflow = TextOverflow.Ellipsis,
-                                                        color = if (isPlaying) Turquoise else LocalContentColor.current.copy(alpha = 0.7f)
-                                                    )
-                                                }
-                                            }
-
-                                            if (epgEntry != null) {
-                                                Column(
-                                                    modifier = Modifier.width(100.dp),
-                                                    horizontalAlignment = Alignment.End
-                                                ) {
-                                                    val timeRange = remember(epgEntry) {
-                                                        "${timeFormat.format(Date(epgEntry.start))} - ${timeFormat.format(Date(epgEntry.stop))}"
-                                                    }
-                                                    Text(
-                                                        text = timeRange,
-                                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp),
-                                                        color = LocalContentColor.current.copy(alpha = 0.5f)
-                                                    )
-                                                    Spacer(modifier = Modifier.height(2.dp))
-                                                    EpgProgressBar(
-                                                        start = epgEntry.start,
-                                                        stop = epgEntry.stop,
-                                                        isActive = isPlaying,
-                                                        timeProvider = { viewModel.currentTime }
-                                                    )
-                                                }
-                                            }
-                                        }
+                            ChannelList(
+                                channels = viewModel.channels,
+                                currentChannelProvider = { viewModel.currentChannel },
+                                focusedChannelProvider = { focusedChannel },
+                                epgMap = viewModel.epgMap,
+                                currentTimeProvider = { viewModel.currentTime },
+                                channelListState = channelListState,
+                                contentFocusRequester = contentFocusRequester,
+                                playingIndex = playingIndex,
+                                focusPlayingNow = focusPlayingNow,
+                                onChannelFocused = { focusedChannel = it },
+                                onChannelClicked = { stream ->
+                                    if (!showContextMenu) {
+                                        viewModel.playChannel(stream)
+                                        showChannelList = false
                                     }
-                                }
-                            }
+                                },
+                                viewModel = viewModel
+                            )
                         } else {
                             Box(modifier = Modifier.fillMaxSize()) {
                                 if ((viewModel.currentMode == MainViewModel.AppMode.VOD && viewModel.vodMovies.isEmpty()) ||
@@ -1686,6 +1589,176 @@ fun MainScreen(
     }
 }
 
+@Composable
+fun ChannelList(
+    channels: List<LiveStream>,
+    currentChannelProvider: () -> LiveStream?,
+    focusedChannelProvider: () -> LiveStream?,
+    epgMap: Map<Int, EpgEntity>,
+    currentTimeProvider: () -> Long,
+    channelListState: androidx.compose.foundation.lazy.LazyListState,
+    contentFocusRequester: androidx.compose.ui.focus.FocusRequester,
+    playingIndex: Int,
+    focusPlayingNow: Boolean,
+    onChannelFocused: (LiveStream) -> Unit,
+    onChannelClicked: (LiveStream) -> Unit,
+    viewModel: MainViewModel
+) {
+    val timeFormat = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
+
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp),
+        state = channelListState,
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 40.dp)
+    ) {
+        itemsIndexed(
+            items = channels,
+            key = { _, stream -> stream.streamId }
+        ) { index, stream ->
+            val isPlaying by remember(stream.streamId) {
+                derivedStateOf { currentChannelProvider()?.streamId == stream.streamId }
+            }
+            val epgEntry = epgMap[stream.streamId]
+            
+            // Using derivedStateOf to isolate focus-related recompositions to only the affected items
+            val isFocusedTarget by remember(stream.streamId, focusPlayingNow, playingIndex, index) {
+                derivedStateOf {
+                    val focusedChannel = focusedChannelProvider()
+                    focusedChannel?.streamId == stream.streamId || 
+                    (focusedChannel == null && (if (focusPlayingNow && playingIndex >= 0) index == playingIndex else index == 0))
+                }
+            }
+
+            ChannelItem(
+                stream = stream,
+                isPlaying = isPlaying,
+                isFocusedTarget = isFocusedTarget,
+                epgEntry = epgEntry,
+                currentTimeProvider = currentTimeProvider,
+                onFocus = { onChannelFocused(stream) },
+                onClick = { onChannelClicked(stream) },
+                contentFocusRequester = contentFocusRequester,
+                viewModel = viewModel,
+                timeFormat = timeFormat
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+fun ChannelItem(
+    stream: LiveStream,
+    isPlaying: Boolean,
+    isFocusedTarget: Boolean,
+    epgEntry: EpgEntity?,
+    currentTimeProvider: () -> Long,
+    onFocus: () -> Unit,
+    onClick: () -> Unit,
+    contentFocusRequester: androidx.compose.ui.focus.FocusRequester,
+    viewModel: MainViewModel,
+    timeFormat: SimpleDateFormat
+) {
+    Surface(
+        onClick = onClick,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp)
+            .onFocusChanged { 
+                if (it.isFocused) {
+                    onFocus()
+                }
+            }
+            .then(
+                if (isFocusedTarget) {
+                    Modifier.focusRequester(contentFocusRequester)
+                } else Modifier
+            ),
+        colors = ClickableSurfaceDefaults.colors(
+            containerColor = if (isPlaying) Turquoise.copy(alpha = 0.05f) else Color.Transparent,
+            focusedContainerColor = Color.White,
+            contentColor = if (isPlaying) Turquoise else Color.White,
+            focusedContentColor = Color.Black
+        ),
+        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(8.dp)),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.02f)
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(horizontal = 12.dp, vertical = 6.dp)
+                .fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            val localIconResId = remember(stream.name) { viewModel.getLocalResourceIdentifier(stream.name) }
+
+            AsyncImage(
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(stream.streamIcon)
+                    .apply {
+                        if (localIconResId != 0) {
+                            error(localIconResId)
+                            fallback(localIconResId)
+                        }
+                    }
+                    .crossfade(true)
+                    .build(),
+                contentDescription = null,
+                modifier = Modifier
+                    .width(60.dp)
+                    .height(34.dp)
+                    .background(Color.Black.copy(alpha = 0.2f), RoundedCornerShape(4.dp)),
+                contentScale = androidx.compose.ui.layout.ContentScale.Fit
+            )
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stream.name,
+                    style = MaterialTheme.typography.titleMedium.copy(fontSize = 16.sp),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    fontWeight = FontWeight.Bold
+                )
+                if (epgEntry != null) {
+                    Text(
+                        text = epgEntry.title,
+                        style = MaterialTheme.typography.bodyLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        color = if (isPlaying) Turquoise else LocalContentColor.current.copy(alpha = 0.7f)
+                    )
+                }
+            }
+
+            if (epgEntry != null) {
+                Column(
+                    modifier = Modifier.width(100.dp),
+                    horizontalAlignment = Alignment.End
+                ) {
+                    val timeRange = remember(epgEntry) {
+                        "${timeFormat.format(Date(epgEntry.start))} - ${timeFormat.format(Date(epgEntry.stop))}"
+                    }
+                    Text(
+                        text = timeRange,
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp),
+                        color = LocalContentColor.current.copy(alpha = 0.5f)
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    EpgProgressBar(
+                        start = epgEntry.start,
+                        stop = epgEntry.stop,
+                        isActive = isPlaying,
+                        timeProvider = currentTimeProvider
+                    )
+                }
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun RecentChannelsOverlay(
@@ -1751,11 +1824,7 @@ fun RecentChannelsOverlay(
                             modifier = Modifier.padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            val context = LocalContext.current
-                            val normalizedName = remember(channel.name) { viewModel.normalizeName(channel.name) }
-                            val localIconResId = remember(normalizedName) {
-                                context.resources.getIdentifier(normalizedName, "drawable", context.packageName)
-                            }
+                            val localIconResId = remember(channel.name) { viewModel.getLocalResourceIdentifier(channel.name) }
 
                             AsyncImage(
                                 model = ImageRequest.Builder(LocalContext.current)
@@ -1827,11 +1896,7 @@ fun ChannelEpgOverlay(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 if (channel != null) {
-                    val context = LocalContext.current
-                    val normalizedName = remember(channel.name) { viewModel.normalizeName(channel.name) }
-                    val localIconResId = remember(normalizedName) {
-                        context.resources.getIdentifier(normalizedName, "drawable", context.packageName)
-                    }
+                    val localIconResId = remember(channel.name) { viewModel.getLocalResourceIdentifier(channel.name) }
 
                     AsyncImage(
                         model = ImageRequest.Builder(LocalContext.current)

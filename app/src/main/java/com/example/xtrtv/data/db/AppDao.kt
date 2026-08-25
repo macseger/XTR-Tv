@@ -90,6 +90,9 @@ interface AppDao {
     @Query("SELECT * FROM series WHERE name LIKE :query ORDER BY seriesId DESC")
     suspend fun searchSeries(query: String): List<SeriesEntity>
 
+    @Query("SELECT * FROM streams WHERE name LIKE :query ORDER BY num ASC")
+    suspend fun searchChannels(query: String): List<StreamEntity>
+
     // Playback History
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertHistory(history: PlaybackHistoryEntity)

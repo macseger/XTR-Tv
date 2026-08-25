@@ -57,12 +57,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     var isSeriesLoading by mutableStateOf(false)
     var selectedMovieHistory by mutableStateOf<PlaybackHistoryEntity?>(null)
     
-    var epgMap by mutableStateOf<Map<Int, EpgEntity>>(emptyMap())
-        private set
-    var nextEpgMap by mutableStateOf<Map<Int, EpgEntity>>(emptyMap())
-        private set
+    val epgMap = androidx.compose.runtime.mutableStateMapOf<Int, EpgEntity>()
+    val nextEpgMap = androidx.compose.runtime.mutableStateMapOf<Int, EpgEntity>()
     var lastEpgUpdate by mutableStateOf<Long?>(null)
         private set
+
+    private val resIdCache = mutableMapOf<String, Int>()
+
+    fun getLocalResourceIdentifier(name: String): Int {
+        val normalized = normalizeName(name)
+        return resIdCache.getOrPut(normalized) {
+            val context = getApplication<Application>().applicationContext
+            context.resources.getIdentifier(normalized, "drawable", context.packageName)
+        }
+    }
 
     @Volatile private var channelIdMap = emptyMap<String, String>()
     @Volatile private var normalizedChannelIdMap = emptyMap<String, String>()
@@ -137,6 +145,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     var searchHistory by mutableStateOf<List<String>>(emptyList())
     var filteredVod by mutableStateOf<List<VodMovie>>(emptyList())
     var filteredSeries by mutableStateOf<List<Series>>(emptyList())
+    var filteredChannels by mutableStateOf<List<LiveStream>>(emptyList())
 
     var updateStatus by mutableStateOf<String?>(null)
     var isCheckingUpdate by mutableStateOf(false)
@@ -692,7 +701,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
 
                 val programs = if (allCandidateIds.isNotEmpty()) {
-                    val windowEnd = currentTimeMs + (6 * 3600 * 1000) // Optimal window to find current and next program
+                    val windowEnd = currentTimeMs + (24 * 3600 * 1000) // 24h window for better EPG coverage
                     withContext(Dispatchers.IO) {
                         allCandidateIds.toList().chunked(500).flatMap { chunk ->
                             dao.getUpcomingEpgForChannels(chunk, currentTimeMs, windowEnd)
@@ -726,8 +735,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 
                 withContext(Dispatchers.Main) {
-                    epgMap = newEpgMap
-                    nextEpgMap = newNextEpgMap
+                    // Update SnapshotStateMaps precisely to minimize recompositions
+                    newEpgMap.forEach { (id, epg) ->
+                        if (epgMap[id] != epg) epgMap[id] = epg
+                    }
+                    val currentEpgKeys = epgMap.keys.toList()
+                    currentEpgKeys.forEach { if (!newEpgMap.containsKey(it)) epgMap.remove(it) }
+
+                    newNextEpgMap.forEach { (id, epg) ->
+                        if (nextEpgMap[id] != epg) nextEpgMap[id] = epg
+                    }
+                    val nextEpgKeys = nextEpgMap.keys.toList()
+                    nextEpgKeys.forEach { if (!newNextEpgMap.containsKey(it)) nextEpgMap.remove(it) }
                 }
             } finally {
                 isMappingEpg = false
@@ -1352,7 +1371,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val epgId = candidates.distinct().firstOrNull()
                 val now = System.currentTimeMillis()
                 val epg = if (epgId != null) {
-                    dao.getEpgForChannel(epgId, now - 3600_000, now + (12 * 3600 * 1000))
+                    dao.getEpgForChannel(epgId, now - 3600_000, now + (24 * 3600 * 1000))
                 } else emptyList()
                 
                 withContext(Dispatchers.Main) { channelEpgList = epg }
@@ -1391,6 +1410,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (query.length < 2) {
             filteredVod = emptyList()
             filteredSeries = emptyList()
+            filteredChannels = emptyList()
             loadSearchHistory()
             return
         }
@@ -1401,6 +1421,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val lowerQuery = query.lowercase()
             val vodResults = dao.searchVod("%$lowerQuery%")
             val seriesResults = dao.searchSeries("%$lowerQuery%")
+            val channelResults = dao.searchChannels("%$lowerQuery%")
             
             val mappedVod = vodResults.map { 
                 VodMovie(it.streamId, it.name, it.streamIcon, it.categoryId, it.rating, it.added, it.containerExtension, it.plot, it.cast, it.director, it.genre, it.releaseDate)
@@ -1408,10 +1429,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val mappedSeries = seriesResults.map {
                 Series(it.seriesId, it.name, it.cover, it.plot, null, null, null, null, it.rating, it.categoryId)
             }
+            val mappedChannels = channelResults.map {
+                LiveStream(it.streamId, it.name, it.streamIcon, it.categoryId, it.num, it.epgChannelId)
+            }
 
             withContext(Dispatchers.Main) {
                 filteredVod = mappedVod
                 filteredSeries = mappedSeries
+                filteredChannels = mappedChannels
             }
         }
     }
