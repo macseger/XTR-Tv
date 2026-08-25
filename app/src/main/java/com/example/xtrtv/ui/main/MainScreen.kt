@@ -760,6 +760,7 @@ fun MainScreen(
                             onClick = { 
                                 viewModel.performSearch("")
                                 showSearchOverlay = true 
+                                showChannelList = false
                             },
                             modifier = Modifier.size(56.dp),
                             colors = ClickableSurfaceDefaults.colors(
@@ -1134,10 +1135,12 @@ fun MainScreen(
                     focusedMovie = movie
                     viewModel.loadVodInfo(movie)
                     showMovieDetails = true
+                    showSearchOverlay = false
                 },
                 onOpenSeries = { series ->
                     viewModel.loadSeriesDetails(series)
                     showSeriesDetails = true
+                    showSearchOverlay = false
                 },
                 focusRequester = searchFocusRequester
             )
