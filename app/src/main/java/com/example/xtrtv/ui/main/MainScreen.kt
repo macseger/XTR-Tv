@@ -315,10 +315,11 @@ fun MainScreen(
     }
 
     BackHandler(enabled = true) {
-        // Om detaljvyer är öppna -> Stäng bara dem för att återgå till listan
+        // Om detaljvyer är öppna -> Stäng dem och återgå till listan
         if (showMovieDetails || showSeriesDetails) {
             showMovieDetails = false
             showSeriesDetails = false
+            showChannelList = true // Säkerställ att listan visas bakom
             return@BackHandler
         }
 
@@ -360,9 +361,17 @@ fun MainScreen(
                 if (viewModel.activePlaybackMode == MainViewModel.AppMode.LIVE) {
                     showExitDialog = true
                 } else {
-                    // I VOD/Serie: Back öppnar menyn
-                    viewModel.changeMode(viewModel.activePlaybackMode)
-                    showChannelList = true
+                    // I VOD/Serie: Återgå till detaljvyn om vi tittar på något, annars öppna menyn
+                    if (viewModel.activePlaybackMode == MainViewModel.AppMode.VOD && focusedMovie != null) {
+                        showMovieDetails = true
+                    } else if (viewModel.activePlaybackMode == MainViewModel.AppMode.SERIES && viewModel.selectedSeries != null) {
+                        showSeriesDetails = true
+                    } else {
+                        if (viewModel.currentMode != viewModel.activePlaybackMode) {
+                            viewModel.changeMode(viewModel.activePlaybackMode)
+                        }
+                        showChannelList = true
+                    }
                 }
             }
         }
@@ -386,6 +395,7 @@ fun MainScreen(
                             if (showMovieDetails || showSeriesDetails) {
                                 showMovieDetails = false
                                 showSeriesDetails = false
+                                showChannelList = true
                             } else if (showSearchOverlay) {
                                 showSearchOverlay = false
                             } else if (showAboutDialog) {
@@ -412,8 +422,16 @@ fun MainScreen(
                         return@onKeyEvent true
                     } else if (viewModel.activePlaybackMode != MainViewModel.AppMode.LIVE) {
                         if (event.type == KeyEventType.KeyUp) {
-                            viewModel.changeMode(viewModel.activePlaybackMode)
-                            showChannelList = true
+                            if (viewModel.activePlaybackMode == MainViewModel.AppMode.VOD && focusedMovie != null) {
+                                showMovieDetails = true
+                            } else if (viewModel.activePlaybackMode == MainViewModel.AppMode.SERIES && viewModel.selectedSeries != null) {
+                                showSeriesDetails = true
+                            } else {
+                                if (viewModel.currentMode != viewModel.activePlaybackMode) {
+                                    viewModel.changeMode(viewModel.activePlaybackMode)
+                                }
+                                showChannelList = true
+                            }
                         }
                         return@onKeyEvent true
                     }
@@ -1150,7 +1168,10 @@ fun MainScreen(
             MovieDetailsOverlay(
                 movie = focusedMovie!!,
                 viewModel = viewModel,
-                onClose = { showMovieDetails = false },
+                onClose = { 
+                    showMovieDetails = false 
+                    showChannelList = true
+                },
                 onPlay = { resume ->
                     showPlaybackControls = false
                     viewModel.playVod(focusedMovie!!, fromStart = !resume, skipResumeDialog = true)
@@ -1164,7 +1185,10 @@ fun MainScreen(
         if (showSeriesDetails) {
             SeriesDetailsOverlay(
                 viewModel = viewModel,
-                onClose = { showSeriesDetails = false },
+                onClose = { 
+                    showSeriesDetails = false 
+                    showChannelList = true
+                },
                 onPlayEpisode = { episode ->
                     showPlaybackControls = false
                     viewModel.playEpisode(episode)
